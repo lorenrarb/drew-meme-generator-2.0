@@ -1,0 +1,39 @@
+# Environment variables and secrets
+.env
+*.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# Static and cache files
+static/swapped_*
+static/*.jpg
+static/*.jpeg
+static/*.png
+*.pyc
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# InsightFace models (large files)
+.insightface/
+
+# Redis
+dump.rdb
+
+# Logs
+*.log

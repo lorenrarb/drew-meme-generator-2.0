@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "app/main.py",
+      "use": "@vercel/python"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "app/main.py"
+    }
+  ],
+  "env": {
+    "REDDIT_CLIENT_ID": "@reddit_client_id",
+    "REDDIT_CLIENT_SECRET": "@reddit_client_secret",
+    "REDDIT_USER_AGENT": "@reddit_user_agent",
+    "GROK_API_KEY": "@grok_api_key",
+    "DREW_FACE_PATH": "./assets/drew_face.jpg",
+    "CACHE_TTL_HOURS": "2",
+    "FLASK_ENV": "production",
+    "FLASK_PORT": "5000"
+  }
+}
