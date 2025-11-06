@@ -39,33 +39,42 @@ def get_face_swapper():
     if _face_swapper is None:
         try:
             import insightface
-            from insightface.app import FaceAnalysis
+            import urllib.request
 
-            # Download and load inswapper_128.onnx model
-            model_path = os.path.join(insightface.app.DEFAULT_MP_NAME, 'inswapper_128.onnx')
+            # Ensure model directory exists
+            model_dir = os.path.join(os.path.expanduser('~'), '.insightface', 'models')
+            os.makedirs(model_dir, exist_ok=True)
+            model_file = os.path.join(model_dir, 'inswapper_128.onnx')
+
+            # Download model if it doesn't exist
+            if not os.path.exists(model_file):
+                print("Downloading inswapper_128.onnx model (529MB)...")
+                url = "https://huggingface.co/CountFloyd/deepfake/resolve/main/inswapper_128.onnx"
+                urllib.request.urlretrieve(url, model_file)
+                print(f"Model downloaded to {model_file}")
 
             # Try loading with insightface's built-in swapper
-            _face_swapper = insightface.model_zoo.get_model(
-                'inswapper_128.onnx',
-                download=True,
-                download_zip=True
-            )
-            print("Inswapper model loaded successfully")
-        except Exception as e:
-            print(f"Error loading inswapper: {e}")
             try:
-                # Alternative: try direct ONNX loading
+                _face_swapper = insightface.model_zoo.get_model(
+                    model_file,
+                    download=False,
+                    download_zip=False
+                )
+                print("Inswapper model loaded successfully via model_zoo")
+            except Exception as e:
+                print(f"model_zoo loading failed, trying direct ONNX: {e}")
                 import onnxruntime
-                model_file = os.path.join(os.path.expanduser('~'), '.insightface', 'models', 'inswapper_128.onnx')
-                if os.path.exists(model_file):
-                    _face_swapper = onnxruntime.InferenceSession(model_file, providers=['CPUExecutionProvider'])
-                    print("Inswapper loaded via ONNX runtime")
-                else:
-                    print("Inswapper model file not found")
-                    _face_swapper = None
-            except Exception as e2:
-                print(f"Alternative inswapper loading failed: {e2}")
-                _face_swapper = None
+                _face_swapper = onnxruntime.InferenceSession(
+                    model_file,
+                    providers=['CPUExecutionProvider']
+                )
+                print("Inswapper loaded via ONNX runtime")
+
+        except Exception as e:
+            print(f"CRITICAL: Error loading inswapper: {e}")
+            import traceback
+            traceback.print_exc()
+            _face_swapper = None
     return _face_swapper
 
 
