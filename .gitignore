@@ -31,6 +31,8 @@ static/*.png
 
 # InsightFace models (large files)
 .insightface/
+models/
+*.onnx
 
 # Redis
 dump.rdb

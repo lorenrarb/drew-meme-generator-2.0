@@ -41,14 +41,43 @@ def get_face_swapper():
             import insightface
             import urllib.request
 
-            # Ensure model directory exists
-            model_dir = os.path.join(os.path.expanduser('~'), '.insightface', 'models')
-            os.makedirs(model_dir, exist_ok=True)
-            model_file = os.path.join(model_dir, 'inswapper_128.onnx')
+            # Try multiple model locations for deployment compatibility
+            # 1. Local project directory (for bundled deployments)
+            local_model_paths = [
+                './models/inswapper_128.onnx',  # Project directory
+                '/opt/render/.insightface/models/inswapper_128.onnx',  # Render persistent disk
+                '/tmp/inswapper_128.onnx',  # Temporary storage
+            ]
 
-            # Download model if it doesn't exist
-            if not os.path.exists(model_file):
-                print("Downloading inswapper_128.onnx model (529MB)...")
+            # 2. Home directory (for local dev)
+            home_model_dir = os.path.join(os.path.expanduser('~'), '.insightface', 'models')
+            os.makedirs(home_model_dir, exist_ok=True)
+            home_model_path = os.path.join(home_model_dir, 'inswapper_128.onnx')
+
+            # Check all possible locations
+            model_file = None
+            for path in local_model_paths + [home_model_path]:
+                if os.path.exists(path):
+                    model_file = path
+                    print(f"Found inswapper model at: {model_file}")
+                    break
+
+            # Download model if not found anywhere
+            if model_file is None:
+                print("Inswapper model not found, downloading (529MB)...")
+                # Try to save to project directory first (best for deployment)
+                os.makedirs('./models', exist_ok=True)
+                if os.access('./models', os.W_OK):
+                    model_file = './models/inswapper_128.onnx'
+                    print("Saving to project directory: ./models/")
+                elif os.access('/tmp', os.W_OK):
+                    model_file = '/tmp/inswapper_128.onnx'
+                    print("Saving to /tmp/ (ephemeral)")
+                else:
+                    model_file = home_model_path
+                    print(f"Saving to home directory: {home_model_dir}")
+
+                # Download from HuggingFace
                 url = "https://huggingface.co/CountFloyd/deepfake/resolve/main/inswapper_128.onnx"
                 urllib.request.urlretrieve(url, model_file)
                 print(f"Model downloaded to {model_file}")
