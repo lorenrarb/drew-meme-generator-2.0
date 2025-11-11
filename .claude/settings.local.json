@@ -23,7 +23,8 @@
       "Bash(sudo apt-get install:*)",
       "Bash(git restore:*)",
       "Bash(gh auth:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(npm install:*)"
     ],
     "deny": [],
     "ask": []
