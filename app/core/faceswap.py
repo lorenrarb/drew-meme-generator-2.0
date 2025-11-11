@@ -46,15 +46,18 @@ def get_face_swapper():
             # Try multiple model locations for deployment compatibility
             # 1. Local project directory (for bundled deployments)
             local_model_paths = [
-                './models/inswapper_128.onnx',  # Project directory
-                '/opt/render/.insightface/models/inswapper_128.onnx',  # Render persistent disk
-                '/tmp/inswapper_128.onnx',  # Temporary storage
+                './models/inswapper_128_fp16.onnx',  # Project directory (FP16)
+                './models/inswapper_128.onnx',  # Project directory (fallback)
+                '/opt/render/.insightface/models/inswapper_128_fp16.onnx',  # Render persistent disk
+                '/opt/render/.insightface/models/inswapper_128.onnx',  # Render persistent disk (fallback)
+                '/tmp/inswapper_128_fp16.onnx',  # Temporary storage
+                '/tmp/inswapper_128.onnx',  # Temporary storage (fallback)
             ]
 
             # 2. Home directory (for local dev)
             home_model_dir = os.path.join(os.path.expanduser('~'), '.insightface', 'models')
             os.makedirs(home_model_dir, exist_ok=True)
-            home_model_path = os.path.join(home_model_dir, 'inswapper_128.onnx')
+            home_model_path = os.path.join(home_model_dir, 'inswapper_128_fp16.onnx')
 
             # Check all possible locations
             model_file = None
@@ -66,21 +69,22 @@ def get_face_swapper():
 
             # Download model if not found anywhere
             if model_file is None:
-                print("Inswapper model not found, downloading (529MB)...")
+                print("Inswapper model not found, downloading FP16 version (~265MB)...")
                 # Try to save to project directory first (best for deployment)
                 os.makedirs('./models', exist_ok=True)
                 if os.access('./models', os.W_OK):
-                    model_file = './models/inswapper_128.onnx'
+                    model_file = './models/inswapper_128_fp16.onnx'
                     print("Saving to project directory: ./models/")
                 elif os.access('/tmp', os.W_OK):
-                    model_file = '/tmp/inswapper_128.onnx'
+                    model_file = '/tmp/inswapper_128_fp16.onnx'
                     print("Saving to /tmp/ (ephemeral)")
                 else:
                     model_file = home_model_path
                     print(f"Saving to home directory: {home_model_dir}")
 
-                # Download from HuggingFace
-                url = "https://huggingface.co/CountFloyd/deepfake/resolve/main/inswapper_128.onnx"
+                # Download FP16 (half precision) model from HuggingFace
+                # FP16 uses ~350MB less RAM than FP32 with minimal quality loss
+                url = "https://huggingface.co/ezioruan/inswapper_128.onnx/resolve/main/inswapper_128_fp16.onnx"
                 urllib.request.urlretrieve(url, model_file)
                 print(f"Model downloaded to {model_file}")
 
@@ -213,12 +217,23 @@ def swap_faces(meme_url: str, source_face_path: str = None) -> Optional[str]:
         # Save result
         cv2.imwrite(output_path, result_img)
         print(f"Face swap complete: {output_path}")
+
+        # Aggressive memory cleanup
+        del result_img, meme_img, source_img, target_faces, source_faces
+        import gc
+        gc.collect()
+
         return output_path
 
     except Exception as e:
         print(f"Face swap error for {meme_url}: {e}")
         import traceback
         traceback.print_exc()
+
+        # Cleanup on error too
+        import gc
+        gc.collect()
+
         return None
 
 
