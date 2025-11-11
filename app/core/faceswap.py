@@ -24,11 +24,10 @@ def get_face_app():
     if _face_app is None:
         try:
             import insightface
-            # Use buffalo_s (smaller, faster, less memory) instead of buffalo_l
-            _face_app = insightface.app.FaceAnalysis(name='buffalo_s')
-            # Reduce detection size to save memory (512x512 instead of 640x640)
-            _face_app.prepare(ctx_id=-1, det_size=(512, 512))  # ctx_id=-1 for CPU
-            print("InsightFace face analysis model loaded successfully (buffalo_s)")
+            # Use buffalo_l for highest quality face detection
+            _face_app = insightface.app.FaceAnalysis(name='buffalo_l')
+            _face_app.prepare(ctx_id=-1, det_size=(640, 640))  # ctx_id=-1 for CPU
+            print("InsightFace face analysis model loaded successfully (buffalo_l)")
         except Exception as e:
             print(f"Error loading InsightFace: {e}")
             _face_app = None
@@ -46,18 +45,15 @@ def get_face_swapper():
             # Try multiple model locations for deployment compatibility
             # 1. Local project directory (for bundled deployments)
             local_model_paths = [
-                './models/inswapper_128_fp16.onnx',  # Project directory (FP16)
-                './models/inswapper_128.onnx',  # Project directory (fallback)
-                '/opt/render/.insightface/models/inswapper_128_fp16.onnx',  # Render persistent disk
-                '/opt/render/.insightface/models/inswapper_128.onnx',  # Render persistent disk (fallback)
-                '/tmp/inswapper_128_fp16.onnx',  # Temporary storage
-                '/tmp/inswapper_128.onnx',  # Temporary storage (fallback)
+                './models/inswapper_128.onnx',  # Project directory
+                '/opt/render/.insightface/models/inswapper_128.onnx',  # Render persistent disk
+                '/tmp/inswapper_128.onnx',  # Temporary storage
             ]
 
             # 2. Home directory (for local dev)
             home_model_dir = os.path.join(os.path.expanduser('~'), '.insightface', 'models')
             os.makedirs(home_model_dir, exist_ok=True)
-            home_model_path = os.path.join(home_model_dir, 'inswapper_128_fp16.onnx')
+            home_model_path = os.path.join(home_model_dir, 'inswapper_128.onnx')
 
             # Check all possible locations
             model_file = None
@@ -69,22 +65,21 @@ def get_face_swapper():
 
             # Download model if not found anywhere
             if model_file is None:
-                print("Inswapper model not found, downloading FP16 version (~265MB)...")
+                print("Inswapper model not found, downloading high-quality version (529MB)...")
                 # Try to save to project directory first (best for deployment)
                 os.makedirs('./models', exist_ok=True)
                 if os.access('./models', os.W_OK):
-                    model_file = './models/inswapper_128_fp16.onnx'
+                    model_file = './models/inswapper_128.onnx'
                     print("Saving to project directory: ./models/")
                 elif os.access('/tmp', os.W_OK):
-                    model_file = '/tmp/inswapper_128_fp16.onnx'
+                    model_file = '/tmp/inswapper_128.onnx'
                     print("Saving to /tmp/ (ephemeral)")
                 else:
                     model_file = home_model_path
                     print(f"Saving to home directory: {home_model_dir}")
 
-                # Download FP16 (half precision) model from HuggingFace
-                # FP16 uses ~350MB less RAM than FP32 with minimal quality loss
-                url = "https://huggingface.co/ezioruan/inswapper_128.onnx/resolve/main/inswapper_128_fp16.onnx"
+                # Download high-quality model from HuggingFace
+                url = "https://huggingface.co/CountFloyd/deepfake/resolve/main/inswapper_128.onnx"
                 urllib.request.urlretrieve(url, model_file)
                 print(f"Model downloaded to {model_file}")
 
