@@ -24,9 +24,11 @@ def get_face_app():
     if _face_app is None:
         try:
             import insightface
-            _face_app = insightface.app.FaceAnalysis(name='buffalo_l')
-            _face_app.prepare(ctx_id=0, det_size=(640, 640))  # Use ctx_id=-1 for GPU
-            print("InsightFace face analysis model loaded successfully")
+            # Use buffalo_s (smaller, faster, less memory) instead of buffalo_l
+            _face_app = insightface.app.FaceAnalysis(name='buffalo_s')
+            # Reduce detection size to save memory (512x512 instead of 640x640)
+            _face_app.prepare(ctx_id=-1, det_size=(512, 512))  # ctx_id=-1 for CPU
+            print("InsightFace face analysis model loaded successfully (buffalo_s)")
         except Exception as e:
             print(f"Error loading InsightFace: {e}")
             _face_app = None
