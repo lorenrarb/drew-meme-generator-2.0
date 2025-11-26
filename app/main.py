@@ -8,6 +8,27 @@ from typing import List, Dict
 
 from app.core.trends import get_trending_memes, reddit
 from app.core.faceswap import swap_faces
+from app.core.celebrity import search_celebrity_images
+
+# Cache for Drew's face to avoid reloading
+_drew_face_cache = None
+
+def get_drew_face():
+    """Get cached Drew's face and source face."""
+    global _drew_face_cache
+    if _drew_face_cache is None:
+        import cv2
+        from app.core.faceswap import get_face_app
+        drew_face_path = os.getenv("DREW_FACE_PATH", "./assets/drew_face.jpg")
+        source_img = cv2.imread(drew_face_path)
+        if source_img is not None:
+            app_face = get_face_app()
+            if app_face is not None:
+                source_faces = app_face.get(source_img)
+                if len(source_faces) > 0:
+                    _drew_face_cache = (source_img, source_faces[0])
+                    print("Drew's face cached successfully")
+    return _drew_face_cache
 
 app = FastAPI(
     title="Drew Meme Generator",
@@ -128,6 +149,28 @@ async def root():
             </form>
             <p style="text-align: center; color: #999; font-size: 14px; margin-top: 10px;">
                 Enter keywords to search Reddit or paste a direct image URL
+            </p>
+        </div>
+
+        <div style="max-width: 600px; margin: 0 auto 30px auto; padding-top: 20px; border-top: 2px solid #ddd;">
+            <h3 style="text-align: center; color: #555; margin-bottom: 15px;">Celebrity Face Swap</h3>
+            <form action="/celebrity" method="post" style="display: flex; gap: 10px;">
+                <input
+                    type="text"
+                    name="celebrity_name"
+                    placeholder="Enter celebrity name (e.g., Tom Hanks, Taylor Swift)..."
+                    style="flex: 1; padding: 12px; border: 2px solid #ddd; border-radius: 4px; font-size: 16px;"
+                    required
+                />
+                <button
+                    type="submit"
+                    style="padding: 12px 24px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: bold;"
+                >
+                    Drew-ify
+                </button>
+            </form>
+            <p style="text-align: center; color: #999; font-size: 14px; margin-top: 10px;">
+                Type a celebrity's name and we'll put Drew's face on their photos!
             </p>
         </div>
 
@@ -377,6 +420,305 @@ async def custom_search(query: str = Form(...)):
                     <p>{str(e)[:200]}</p>
                 </div>
             """
+
+    html += """
+        </div>
+    </body>
+    </html>
+    """
+
+    return HTMLResponse(content=html)
+
+
+@app.post("/celebrity")
+async def celebrity_faceswap(celebrity_name: str = Form(...)):
+    """
+    Handle celebrity face swap - search for celebrity images and swap Drew's face.
+
+    Args:
+        celebrity_name: Name of the celebrity
+
+    Returns:
+        HTML page with face-swapped celebrity photos
+    """
+    html = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Drew Meme Generator - Celebrity Face Swap</title>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                max-width: 1200px;
+                margin: 0 auto;
+                padding: 20px;
+                background-color: #f5f5f5;
+            }
+            h1 {
+                color: #333;
+                text-align: center;
+            }
+            .back-link {
+                text-align: center;
+                margin-bottom: 20px;
+            }
+            .back-link a {
+                color: #007bff;
+                text-decoration: none;
+                font-size: 16px;
+            }
+            .result-container {
+                max-width: 1200px;
+                margin: 0 auto;
+            }
+            .celebrity-grid {
+                display: flex;
+                justify-content: center;
+                margin-top: 30px;
+            }
+            .celebrity-card {
+                background: white;
+                border-radius: 8px;
+                padding: 30px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                max-width: 1000px;
+                width: 100%;
+            }
+            .comparison-container {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 25px;
+                margin-bottom: 20px;
+            }
+            .comparison-item {
+                text-align: center;
+            }
+            .comparison-item img {
+                width: 100%;
+                height: auto;
+                border-radius: 4px;
+                border: 2px solid #ddd;
+            }
+            .comparison-label {
+                font-weight: bold;
+                margin-top: 8px;
+                color: #555;
+                font-size: 14px;
+            }
+            .meta {
+                color: #666;
+                text-align: center;
+                margin-top: 10px;
+                font-size: 14px;
+            }
+            .error {
+                color: red;
+                padding: 20px;
+                background: #fee;
+                border-radius: 4px;
+                text-align: center;
+                margin: 20px auto;
+                max-width: 600px;
+            }
+            .loading {
+                text-align: center;
+                color: #666;
+                padding: 40px;
+                font-size: 18px;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>Drew Meme Generator</h1>
+        <div class="back-link">
+            <a href="/">← Back to Trending Memes</a>
+        </div>
+        <div class="result-container">
+    """
+
+    try:
+        html += f"""
+            <h2 style="text-align: center; color: #555;">Drew-ifying: {celebrity_name}</h2>
+            <div class="loading">Searching for photos and swapping faces...</div>
+        """
+
+        # Search for celebrity images (fetch up to 10, randomly select 1)
+        print(f"Searching for celebrity: {celebrity_name}")
+        image_urls = search_celebrity_images(celebrity_name, num_images=1)
+
+        if not image_urls:
+            html += f"""
+                <div class="error">
+                    <h3>No images found</h3>
+                    <p>Couldn't find photos for "{celebrity_name}".</p>
+                    <p>Try a different name or check the spelling.</p>
+                </div>
+            """
+        else:
+            html += '<div class="celebrity-grid">'
+            successful_swaps = 0
+
+            for i, img_url in enumerate(image_urls):
+                try:
+                    print(f"Processing image {i+1}/{len(image_urls)}: {img_url}")
+
+                    # Save original image to static folder
+                    import requests
+                    from io import BytesIO
+                    from PIL import Image as PILImage
+                    import time
+                    import urllib.parse
+
+                    # Create a simple, clean filename using timestamp and index
+                    timestamp = int(time.time() * 1000)
+                    # Get extension from URL
+                    url_path = urllib.parse.urlparse(img_url).path
+                    ext = os.path.splitext(url_path)[1]
+                    if not ext or ext.lower() not in ['.jpg', '.jpeg', '.png']:
+                        ext = '.jpg'
+
+                    original_filename = f"original_{celebrity_name.replace(' ', '_')}_{i}_{timestamp}{ext}"
+                    original_path = os.path.join('static', original_filename)
+
+                    # Download image once and convert to both PIL and OpenCV formats
+                    headers = {'User-Agent': 'Mozilla/5.0'}
+                    resp = requests.get(img_url, headers=headers, timeout=10)
+                    resp.raise_for_status()
+
+                    # Convert to PIL for saving original
+                    img_pil = PILImage.open(BytesIO(resp.content))
+                    if img_pil.mode != 'RGB':
+                        img_pil = img_pil.convert('RGB')
+
+                    # Optimize: Resize very large images to max 1200px width for faster processing
+                    max_width = 1200
+                    if img_pil.width > max_width:
+                        ratio = max_width / img_pil.width
+                        new_height = int(img_pil.height * ratio)
+                        img_pil = img_pil.resize((max_width, new_height), PILImage.Resampling.LANCZOS)
+                        print(f"Resized image from original size to {max_width}x{new_height} for faster processing")
+
+                    # Save original
+                    img_pil.save(original_path)
+                    print(f"Saved original to: {original_path}")
+
+                    # Perform face swap - use the same base filename
+                    swapped_filename = f"swapped_{celebrity_name.replace(' ', '_')}_{i}_{timestamp}{ext}"
+                    swapped_path_full = os.path.join('static', swapped_filename)
+
+                    # Import face swap functions
+                    from app.core.faceswap import get_face_app, get_face_swapper
+                    import cv2
+                    import numpy as np
+
+                    # Pre-load models (already cached after first use)
+                    app_face = get_face_app()
+                    swapper = get_face_swapper()
+
+                    if app_face is None:
+                        raise ValueError("Face detection model not available")
+
+                    # Use cached Drew's face (much faster)
+                    drew_cache = get_drew_face()
+                    if drew_cache is None:
+                        raise ValueError("Could not load Drew's face")
+
+                    source_img, source_face = drew_cache
+
+                    # Convert PIL image to OpenCV format (reuse downloaded image)
+                    meme_img = cv2.cvtColor(np.array(img_pil), cv2.COLOR_RGB2BGR)
+                    if meme_img is None:
+                        raise ValueError(f"Could not process image: {img_url}")
+
+                    target_faces = app_face.get(meme_img)
+                    if len(target_faces) == 0:
+                        print(f"No faces detected in image {i+1}")
+                        continue
+
+                    # Perform face swap
+                    result_img = meme_img.copy()
+
+                    if swapper is not None:
+                        print(f"Swapping {len(target_faces)} face(s) with inswapper...")
+                        for target_face in target_faces:
+                            result_img = swapper.get(result_img, target_face, source_face, paste_back=True)
+                        print("Inswapper face swap completed")
+
+                    # Save result with clean filename
+                    cv2.imwrite(swapped_path_full, result_img)
+                    print(f"Face swap complete: {swapped_path_full}")
+
+                    # Cleanup (but not source_img/source_face since they're cached)
+                    del result_img, meme_img, target_faces, img_pil
+                    import gc
+                    gc.collect()
+
+                    swapped_path = swapped_path_full
+
+                    if swapped_path:
+                        html += f"""
+                            <div class="celebrity-card">
+                                <div class="comparison-container">
+                                    <div class="comparison-item">
+                                        <img src="/{original_path}" alt="Original {celebrity_name}">
+                                        <div class="comparison-label">Original</div>
+                                    </div>
+                                    <div class="comparison-item">
+                                        <img src="/{swapped_path}" alt="{celebrity_name} with Drew's face">
+                                        <div class="comparison-label">Drew-ified!</div>
+                                    </div>
+                                </div>
+                            </div>
+                        """
+                        successful_swaps += 1
+                    else:
+                        print(f"No faces detected in image {i+1}")
+
+                except Exception as e:
+                    print(f"Error processing image {i+1}: {str(e)[:100]}")
+                    continue
+
+            html += '</div>'
+
+            if successful_swaps == 0:
+                html += f"""
+                    <div class="error">
+                        <h3>No faces detected</h3>
+                        <p>Found photos for "{celebrity_name}" but couldn't detect any faces to swap.</p>
+                        <p>Try a different celebrity.</p>
+                    </div>
+                """
+            else:
+                html += f"""
+                    <p style="text-align: center; color: #28a745; margin-top: 20px; font-weight: bold; font-size: 18px;">
+                        ✨ Drew-ification Complete! ✨
+                    </p>
+                    <div style="text-align: center; margin-top: 20px;">
+                        <form action="/celebrity" method="post" style="display: inline;">
+                            <input type="hidden" name="celebrity_name" value="{celebrity_name}">
+                            <button
+                                type="submit"
+                                style="padding: 12px 24px; background: #17a2b8; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: bold; margin-right: 10px;"
+                            >
+                                🔄 Try Another {celebrity_name} Photo
+                            </button>
+                        </form>
+                        <a href="/" style="padding: 12px 24px; background: #6c757d; color: white; text-decoration: none; border-radius: 4px; font-size: 16px; font-weight: bold; display: inline-block;">
+                            ← Back to Home
+                        </a>
+                    </div>
+                """
+
+    except Exception as e:
+        html += f"""
+            <div class="error">
+                <h3>Error processing request</h3>
+                <p>{str(e)[:200]}</p>
+            </div>
+        """
+        print(f"Celebrity face swap error: {e}")
+        import traceback
+        traceback.print_exc()
 
     html += """
         </div>
