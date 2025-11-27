@@ -186,12 +186,14 @@ async def root():
         <div class="meme-grid">
     """
 
-    # Process memes until we have 3 successful face swaps
+    # Process memes until we have 2 successful face swaps (reduced from 3)
+    # Add max attempts to prevent excessive processing
     successful_swaps = 0
-    target_swaps = 3
+    target_swaps = 2
+    max_attempts = 10  # Don't try more than 10 memes
 
-    for trend in trends:
-        if successful_swaps >= target_swaps:
+    for attempt, trend in enumerate(trends):
+        if successful_swaps >= target_swaps or attempt >= max_attempts:
             break
 
         try:

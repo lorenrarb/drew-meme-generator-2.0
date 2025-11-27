@@ -167,7 +167,8 @@ def swap_faces(meme_url: str, source_face_path: str = None) -> Optional[str]:
 
         target_faces = app.get(meme_img)
         if len(target_faces) == 0:
-            raise ValueError("No faces detected in target meme")
+            print(f"No faces detected in target meme: {meme_url[:100]}")
+            return None  # Return None instead of raising exception for better performance
 
         # Perform face swap using inswapper
         result_img = meme_img.copy()
