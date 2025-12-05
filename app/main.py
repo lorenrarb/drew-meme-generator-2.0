@@ -9,6 +9,7 @@ from typing import List, Dict
 from app.core.trends import get_trending_memes, reddit
 from app.core.faceswap import swap_faces
 from app.core.celebrity import search_celebrity_images
+from app.core.cache import load_cached_memes, save_cached_memes, is_cache_valid, get_cache_age
 
 # Cache for Drew's face to avoid reloading
 _drew_face_cache = None
@@ -50,86 +51,169 @@ os.makedirs("static", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
+# Startup event to pre-warm models for faster first request
+@app.on_event("startup")
+async def startup_event():
+    """Pre-warm face detection models on startup for better performance."""
+    print("🚀 Starting up Drew Meme Generator...")
+    print("🔥 Pre-warming face detection models...")
+
+    try:
+        # Load models in background
+        from app.core.faceswap import get_face_app, get_face_swapper
+        get_face_app()
+        get_face_swapper()
+
+        # Pre-load Drew's face
+        get_drew_face()
+
+        print("✅ Models loaded and ready!")
+    except Exception as e:
+        print(f"⚠️  Warning: Model pre-warming failed: {e}")
+        print("Models will load on first request instead.")
+
+    # Check cache status
+    cache_age = get_cache_age()
+    if is_cache_valid():
+        print(f"✅ Cache is valid (age: {cache_age:.1f}h)")
+    else:
+        print("⚠️  No valid cache found - first homepage load will generate fresh memes")
+
+
+def generate_fresh_memes() -> List[Dict]:
+    """Generate fresh face-swapped memes (called when cache is expired)."""
+    trends = get_trending_memes()
+    random.shuffle(trends)
+
+    memes = []
+    successful_swaps = 0
+    target_swaps = 3  # Generate 3 memes for cache
+    max_attempts = 15
+
+    for attempt, trend in enumerate(trends):
+        if successful_swaps >= target_swaps or attempt >= max_attempts:
+            break
+
+        try:
+            swapped_path = swap_faces(trend["url"])
+            if swapped_path:
+                memes.append({
+                    "swapped_path": swapped_path,
+                    "title": trend["title"],
+                    "sub": trend["sub"],
+                    "score": trend["score"]
+                })
+                successful_swaps += 1
+                print(f"Cached meme {successful_swaps}/{target_swaps}: {trend['title'][:50]}")
+        except Exception as e:
+            print(f"Error generating meme: {str(e)[:100]}")
+
+    return memes
+
+
 @app.get("/", response_class=HTMLResponse)
 async def root():
     """
     Main page: Display trending memes with Drew face-swaps.
+    Uses cache for instant loading!
     """
-    try:
-        trends = get_trending_memes()
-        # Shuffle to show different memes on each refresh
-        random.shuffle(trends)
-    except Exception as e:
-        return HTMLResponse(
-            content=f"<html><body><h1>Error fetching trends</h1><p>{str(e)}</p></body></html>",
-            status_code=500
-        )
+    # Try to load from cache first
+    cached_memes = load_cached_memes()
+    cache_age = get_cache_age()
 
-    html = """
+    if cached_memes and len(cached_memes) > 0:
+        # Serve from cache instantly!
+        memes = cached_memes
+        cache_status = f"⚡ Lightning-fast load! (cached {cache_age:.1f}h ago)" if cache_age else "⚡ From cache"
+        print(f"Serving {len(memes)} memes from cache")
+    else:
+        # Generate fresh memes if no cache
+        cache_status = "🔄 Generating fresh memes..."
+        print("No valid cache, generating fresh memes")
+        try:
+            memes = generate_fresh_memes()
+            # Save to cache for next time
+            if len(memes) > 0:
+                save_cached_memes(memes)
+        except Exception as e:
+            return HTMLResponse(
+                content=f"<html><body><h1>Error fetching trends</h1><p>{str(e)}</p></body></html>",
+                status_code=500
+            )
+
+    html = f"""
     <!DOCTYPE html>
     <html>
     <head>
         <title>Drew Meme Generator</title>
         <style>
-            body {
+            body {{
                 font-family: Arial, sans-serif;
                 max-width: 1200px;
                 margin: 0 auto;
                 padding: 20px;
                 background-color: #f5f5f5;
-            }
-            h1 {
+            }}
+            h1 {{
                 color: #333;
                 text-align: center;
-            }
-            .subtitle {
+            }}
+            .subtitle {{
                 text-align: center;
                 color: #666;
-                margin-bottom: 30px;
-            }
-            .meme-grid {
+                margin-bottom: 10px;
+            }}
+            .cache-status {{
+                text-align: center;
+                color: #28a745;
+                font-size: 14px;
+                font-weight: bold;
+                margin-bottom: 20px;
+            }}
+            .meme-grid {{
                 display: grid;
                 grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
                 gap: 20px;
-            }
-            .meme-card {
+            }}
+            .meme-card {{
                 background: white;
                 border-radius: 8px;
                 padding: 15px;
                 box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            }
-            .meme-card img {
+            }}
+            .meme-card img {{
                 width: 100%;
                 height: auto;
                 border-radius: 4px;
                 margin-bottom: 10px;
-            }
-            .meme-title {
+            }}
+            .meme-title {{
                 font-weight: bold;
                 color: #333;
                 margin-bottom: 5px;
-            }
-            .meme-meta {
+            }}
+            .meme-meta {{
                 font-size: 0.9em;
                 color: #666;
-            }
-            .error {
+            }}
+            .error {{
                 color: red;
                 padding: 10px;
                 background: #fee;
                 border-radius: 4px;
                 margin: 10px 0;
-            }
-            .loading {
+            }}
+            .loading {{
                 text-align: center;
                 color: #666;
                 padding: 20px;
-            }
+            }}
         </style>
     </head>
     <body>
         <h1>Drew Meme Generator</h1>
         <p class="subtitle">Trending Reddit memes with Drew's face auto-swapped</p>
+        <p class="cache-status">{cache_status}</p>
 
         <div style="max-width: 600px; margin: 0 auto 30px auto;">
             <form action="/custom" method="post" style="display: flex; gap: 10px;">
@@ -186,36 +270,17 @@ async def root():
         <div class="meme-grid">
     """
 
-    # Process memes until we have 2 successful face swaps (reduced from 3)
-    # Add max attempts to prevent excessive processing
-    successful_swaps = 0
-    target_swaps = 2
-    max_attempts = 10  # Don't try more than 10 memes
-
-    for attempt, trend in enumerate(trends):
-        if successful_swaps >= target_swaps or attempt >= max_attempts:
-            break
-
-        try:
-            swapped_path = swap_faces(trend["url"])
-            if swapped_path:
-                # Only add to output if face swap was successful
-                html += f"""
-                <div class="meme-card">
-                    <img src="/{swapped_path}" alt="{trend['title']}" loading="lazy">
-                    <div class="meme-title">{trend['title'][:80]}...</div>
-                    <div class="meme-meta">
-                        r/{trend['sub']} • Score: {trend['score']}
-                    </div>
+    # Render cached memes
+    for meme in memes:
+        html += f"""
+            <div class="meme-card">
+                <img src="/{meme['swapped_path']}" alt="{meme['title']}" loading="lazy">
+                <div class="meme-title">{meme['title'][:80]}...</div>
+                <div class="meme-meta">
+                    r/{meme['sub']} • Score: {meme['score']}
                 </div>
-                """
-                successful_swaps += 1
-            else:
-                # Skip memes with no faces detected
-                print(f"Skipping meme (no faces): {trend['title'][:50]}")
-        except Exception as e:
-            # Skip memes that error during processing
-            print(f"Skipping meme (error): {trend['title'][:50]} - {str(e)[:100]}")
+            </div>
+        """
 
     html += """
         </div>
@@ -266,7 +331,46 @@ async def api_swap(url: str) -> Dict:
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
-    return {"status": "healthy", "service": "drew-meme-generator"}
+    cache_age = get_cache_age()
+    return {
+        "status": "healthy",
+        "service": "drew-meme-generator",
+        "cache_age_hours": round(cache_age, 2) if cache_age else None,
+        "cache_valid": is_cache_valid()
+    }
+
+
+@app.post("/api/refresh-cache")
+async def refresh_cache():
+    """
+    Refresh the meme cache with fresh face-swapped memes.
+    This endpoint can be called periodically (e.g., via cron job) to keep content fresh.
+    """
+    try:
+        print("Starting cache refresh...")
+        from app.core.cache import clear_cache
+        clear_cache()
+
+        # Generate fresh memes
+        memes = generate_fresh_memes()
+
+        if len(memes) > 0:
+            save_cached_memes(memes)
+            return {
+                "success": True,
+                "message": f"Cache refreshed with {len(memes)} memes",
+                "memes_count": len(memes)
+            }
+        else:
+            return {
+                "success": False,
+                "message": "Failed to generate any memes"
+            }
+    except Exception as e:
+        print(f"Cache refresh error: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/custom")

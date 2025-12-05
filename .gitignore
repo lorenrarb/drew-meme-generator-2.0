@@ -20,6 +20,7 @@ static/swapped_*
 static/*.jpg
 static/*.jpeg
 static/*.png
+static/meme_cache.json
 *.pyc
 .DS_Store
 

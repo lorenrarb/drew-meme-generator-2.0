@@ -210,8 +210,16 @@ def swap_faces(meme_url: str, source_face_path: str = None) -> Optional[str]:
 
         output_path = os.path.join('static', filename)
 
-        # Save result
-        cv2.imwrite(output_path, result_img)
+        # Save result with optimized compression for faster loading
+        # Use JPEG quality 85 for good balance between quality and file size
+        if output_path.endswith('.jpg') or output_path.endswith('.jpeg'):
+            cv2.imwrite(output_path, result_img, [cv2.IMWRITE_JPEG_QUALITY, 85])
+        elif output_path.endswith('.png'):
+            # PNG compression level 6 (0-9, higher = more compression)
+            cv2.imwrite(output_path, result_img, [cv2.IMWRITE_PNG_COMPRESSION, 6])
+        else:
+            cv2.imwrite(output_path, result_img, [cv2.IMWRITE_JPEG_QUALITY, 85])
+
         print(f"Face swap complete: {output_path}")
 
         # Aggressive memory cleanup
