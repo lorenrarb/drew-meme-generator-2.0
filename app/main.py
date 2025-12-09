@@ -6,7 +6,7 @@ import os
 import random
 from typing import List, Dict
 
-from app.core.trends import get_trending_memes, reddit
+from app.core.trends import get_trending_memes, reddit, is_content_appropriate, SAFE_SUBREDDITS
 from app.core.faceswap import swap_faces
 from app.core.celebrity import search_celebrity_images
 from app.core.cache import load_cached_memes, save_cached_memes, is_cache_valid, get_cache_age
@@ -474,21 +474,23 @@ async def custom_search(query: str = Form(...)):
                 </div>
             """
     else:
-        # Search Reddit for matching memes
+        # Search Reddit for matching memes (safe subreddits only)
         try:
-            # Search across meme subreddits
+            # Search across safe meme subreddits with content filtering
             search_results = []
-            for subreddit_name in ['memes', 'dankmemes', 'wholesomememes']:
+            for subreddit_name in SAFE_SUBREDDITS:
                 try:
                     subreddit = reddit.subreddit(subreddit_name)
                     for post in subreddit.search(query, limit=10):
                         if any(ext in post.url.lower() for ext in ['.jpg', '.jpeg', '.png', 'i.redd.it', 'i.imgur.com']):
-                            search_results.append({
-                                "title": post.title,
-                                "url": post.url,
-                                "sub": subreddit_name,
-                                "score": post.score
-                            })
+                            # Apply content filter
+                            if is_content_appropriate(post.title, post):
+                                search_results.append({
+                                    "title": post.title,
+                                    "url": post.url,
+                                    "sub": subreddit_name,
+                                    "score": post.score
+                                })
                 except:
                     continue
 

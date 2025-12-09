@@ -31,19 +31,54 @@ reddit = praw.Reddit(
     user_agent=REDDIT_USER_AGENT
 )
 
+# Content filter - block vulgar/inappropriate content
+BLOCKED_KEYWORDS = [
+    "nsfw", "porn", "sex", "nude", "naked", "fuck", "shit", "ass", "dick", "cock",
+    "pussy", "damn", "hell", "bastard", "bitch", "whore", "slut", "crap",
+    "piss", "rape", "kill", "murder", "suicide", "death", "gore", "blood"
+]
+
+# Safe subreddits only (no NSFW or vulgar content)
+SAFE_SUBREDDITS = ["wholesomememes", "memes", "aww", "funny"]
+
+
+def is_content_appropriate(title: str, post_obj=None) -> bool:
+    """
+    Check if content is appropriate (not vulgar or NSFW).
+
+    Args:
+        title: Post title to check
+        post_obj: Reddit post object (optional, for NSFW flag check)
+
+    Returns:
+        True if appropriate, False if should be filtered
+    """
+    # Check NSFW flag if post object provided
+    if post_obj and hasattr(post_obj, 'over_18') and post_obj.over_18:
+        return False
+
+    # Check title for blocked keywords
+    title_lower = title.lower()
+    for keyword in BLOCKED_KEYWORDS:
+        if keyword in title_lower:
+            return False
+
+    return True
+
 
 def get_trending_memes(subreddits: List[str] = None) -> List[Dict]:
     """
     Fetch trending memes from specified subreddits with 2h cache.
+    Filters out NSFW and vulgar content.
 
     Args:
-        subreddits: List of subreddit names. Defaults to ['memes', 'dankmemes']
+        subreddits: List of subreddit names. Defaults to safe subreddits
 
     Returns:
         List of meme dictionaries with url, title, score, etc.
     """
     if subreddits is None:
-        subreddits = ["memes", "dankmemes"]
+        subreddits = SAFE_SUBREDDITS
 
     cache_key = f"trends:{'|'.join(subreddits)}"
 
@@ -58,22 +93,26 @@ def get_trending_memes(subreddits: List[str] = None) -> List[Dict]:
             if (datetime.utcnow().timestamp() - timestamp) < CACHE_TTL:
                 return cached_data
 
-    # Fetch fresh data
+    # Fetch fresh data with content filtering
     trends = []
     for sub in subreddits:
         try:
             subreddit = reddit.subreddit(sub)
-            for post in subreddit.hot(limit=10):
+            for post in subreddit.hot(limit=15):  # Fetch more to account for filtering
                 # Filter for image posts
                 if any(ext in post.url.lower() for ext in ['.jpg', '.jpeg', '.png', 'i.redd.it', 'i.imgur.com']):
-                    trends.append({
-                        "title": post.title,
-                        "url": post.url,
-                        "id": post.id,
-                        "sub": sub,
-                        "score": post.score,
-                        "fetched_at": datetime.utcnow().isoformat()
-                    })
+                    # Apply content filter
+                    if is_content_appropriate(post.title, post):
+                        trends.append({
+                            "title": post.title,
+                            "url": post.url,
+                            "id": post.id,
+                            "sub": sub,
+                            "score": post.score,
+                            "fetched_at": datetime.utcnow().isoformat()
+                        })
+                    else:
+                        print(f"Filtered out inappropriate content: {post.title[:50]}...")
         except Exception as e:
             print(f"Error fetching from r/{sub}: {e}")
             continue
