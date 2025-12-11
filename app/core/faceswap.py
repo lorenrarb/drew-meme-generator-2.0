@@ -26,8 +26,10 @@ def get_face_app():
             import insightface
             # Use buffalo_l for highest quality face detection
             _face_app = insightface.app.FaceAnalysis(name='buffalo_l')
-            _face_app.prepare(ctx_id=-1, det_size=(640, 640))  # ctx_id=-1 for CPU
-            print("InsightFace face analysis model loaded successfully (buffalo_l)")
+            # Lower detection threshold for better sensitivity (default is 0.5)
+            # det_size=(640, 640) is the detection resolution
+            _face_app.prepare(ctx_id=-1, det_size=(640, 640), det_thresh=0.3)
+            print("InsightFace face analysis model loaded successfully (buffalo_l, det_thresh=0.3)")
         except Exception as e:
             print(f"Error loading InsightFace: {e}")
             _face_app = None
@@ -111,16 +113,35 @@ def get_face_swapper():
 def download_image(url: str) -> Optional[np.ndarray]:
     """Download image from URL and convert to OpenCV format."""
     try:
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        resp = requests.get(url, headers=headers, timeout=10)
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8'
+        }
+        resp = requests.get(url, headers=headers, timeout=15, allow_redirects=True)
         resp.raise_for_status()
+
+        # Load image from bytes
         img = Image.open(BytesIO(resp.content))
-        # Convert to RGB if needed
-        if img.mode != 'RGB':
+        print(f"Downloaded image: {img.size[0]}x{img.size[1]}px, mode: {img.mode}")
+
+        # Convert to RGB if needed (handles RGBA, L, P, etc.)
+        if img.mode not in ['RGB', 'BGR']:
+            print(f"Converting image from {img.mode} to RGB")
             img = img.convert('RGB')
-        return cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+
+        # Convert PIL to OpenCV (numpy array)
+        img_array = np.array(img)
+        img_bgr = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
+
+        # Ensure image has valid dimensions
+        if img_bgr.shape[0] < 50 or img_bgr.shape[1] < 50:
+            print(f"Warning: Image is very small ({img_bgr.shape[1]}x{img_bgr.shape[0]}px)")
+
+        return img_bgr
     except Exception as e:
-        print(f"Error downloading image from {url}: {e}")
+        print(f"Error downloading image from {url[:100]}: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 
@@ -165,10 +186,45 @@ def swap_faces(meme_url: str, source_face_path: str = None) -> Optional[str]:
         if meme_img is None:
             raise ValueError(f"Could not download meme: {meme_url}")
 
+        # Log image dimensions for debugging
+        h, w = meme_img.shape[:2]
+        print(f"Target image dimensions: {w}x{h}px")
+
+        # Try face detection with current image
         target_faces = app.get(meme_img)
+
+        # If no faces found, try with different image sizes
         if len(target_faces) == 0:
-            print(f"No faces detected in target meme: {meme_url[:100]}")
+            print(f"No faces detected at original size, trying alternative sizes...")
+
+            # Try resizing image if it's very large (might help with detection)
+            if max(h, w) > 1920:
+                scale = 1920 / max(h, w)
+                new_w, new_h = int(w * scale), int(h * scale)
+                resized_img = cv2.resize(meme_img, (new_w, new_h))
+                print(f"Trying detection on resized image: {new_w}x{new_h}px")
+                target_faces = app.get(resized_img)
+                if len(target_faces) > 0:
+                    # Scale is working, use resized image
+                    meme_img = resized_img
+                    print(f"✓ Found {len(target_faces)} face(s) after resize")
+
+            # Still no faces? Try with smaller image if it's medium-sized
+            if len(target_faces) == 0 and max(h, w) > 800:
+                scale = 800 / max(h, w)
+                new_w, new_h = int(w * scale), int(h * scale)
+                resized_img = cv2.resize(meme_img, (new_w, new_h))
+                print(f"Trying detection on smaller image: {new_w}x{new_h}px")
+                target_faces = app.get(resized_img)
+                if len(target_faces) > 0:
+                    meme_img = resized_img
+                    print(f"✓ Found {len(target_faces)} face(s) after smaller resize")
+
+        if len(target_faces) == 0:
+            print(f"✗ No faces detected in target meme after trying multiple sizes: {meme_url[:100]}")
             return None  # Return None instead of raising exception for better performance
+
+        print(f"✓ Successfully detected {len(target_faces)} face(s) in target image")
 
         # Perform face swap using inswapper
         result_img = meme_img.copy()
