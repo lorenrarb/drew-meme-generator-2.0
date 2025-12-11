@@ -1,4 +1,4 @@
-import praw
+import asyncpraw
 import redis
 import json
 import os
@@ -24,8 +24,8 @@ except:
     MEMORY_CACHE = {}
     print("Redis not available, using in-memory cache")
 
-# Reddit setup
-reddit = praw.Reddit(
+# Reddit setup - async version
+reddit = asyncpraw.Reddit(
     client_id=REDDIT_CLIENT_ID,
     client_secret=REDDIT_CLIENT_SECRET,
     user_agent=REDDIT_USER_AGENT
@@ -66,7 +66,7 @@ def is_content_appropriate(title: str, post_obj=None) -> bool:
     return True
 
 
-def get_trending_memes(subreddits: List[str] = None) -> List[Dict]:
+async def get_trending_memes(subreddits: List[str] = None) -> List[Dict]:
     """
     Fetch trending memes from specified subreddits with 2h cache.
     Filters out NSFW and vulgar content.
@@ -97,8 +97,8 @@ def get_trending_memes(subreddits: List[str] = None) -> List[Dict]:
     trends = []
     for sub in subreddits:
         try:
-            subreddit = reddit.subreddit(sub)
-            for post in subreddit.hot(limit=15):  # Fetch more to account for filtering
+            subreddit = await reddit.subreddit(sub)
+            async for post in subreddit.hot(limit=15):  # Fetch more to account for filtering
                 # Filter for image posts
                 if any(ext in post.url.lower() for ext in ['.jpg', '.jpeg', '.png', 'i.redd.it', 'i.imgur.com']):
                     # Apply content filter

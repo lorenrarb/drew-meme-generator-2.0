@@ -80,9 +80,9 @@ async def startup_event():
         print("⚠️  No valid cache found - first homepage load will generate fresh memes")
 
 
-def generate_fresh_memes() -> List[Dict]:
+async def generate_fresh_memes() -> List[Dict]:
     """Generate fresh face-swapped memes (called when cache is expired)."""
-    trends = get_trending_memes()
+    trends = await get_trending_memes()
     random.shuffle(trends)
 
     memes = []
@@ -131,7 +131,7 @@ async def root():
         cache_status = "🔄 Generating fresh memes..."
         print("No valid cache, generating fresh memes")
         try:
-            memes = generate_fresh_memes()
+            memes = await generate_fresh_memes()
             # Save to cache for next time
             if len(memes) > 0:
                 save_cached_memes(memes)
@@ -297,7 +297,7 @@ async def api_trends(limit: int = 20) -> List[Dict]:
     API endpoint: Get raw trending memes data without face-swap.
     """
     try:
-        trends = get_trending_memes()
+        trends = await get_trending_memes()
         return trends[:limit]
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -352,7 +352,7 @@ async def refresh_cache():
         clear_cache()
 
         # Generate fresh memes
-        memes = generate_fresh_memes()
+        memes = await generate_fresh_memes()
 
         if len(memes) > 0:
             save_cached_memes(memes)
@@ -480,8 +480,8 @@ async def custom_search(query: str = Form(...)):
             search_results = []
             for subreddit_name in SAFE_SUBREDDITS:
                 try:
-                    subreddit = reddit.subreddit(subreddit_name)
-                    for post in subreddit.search(query, limit=10):
+                    subreddit = await reddit.subreddit(subreddit_name)
+                    async for post in subreddit.search(query, limit=10):
                         if any(ext in post.url.lower() for ext in ['.jpg', '.jpeg', '.png', 'i.redd.it', 'i.imgur.com']):
                             # Apply content filter
                             if is_content_appropriate(post.title, post):
