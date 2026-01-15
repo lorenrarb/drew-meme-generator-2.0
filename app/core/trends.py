@@ -5,8 +5,12 @@ import os
 from datetime import datetime
 from typing import List, Dict
 from dotenv import load_dotenv
+from better_profanity import profanity
 
 load_dotenv()
+
+# Initialize profanity filter
+profanity.load_censor_words()
 
 # Config from environment
 REDDIT_CLIENT_ID = os.getenv("REDDIT_CLIENT_ID")
@@ -31,12 +35,14 @@ reddit = asyncpraw.Reddit(
     user_agent=REDDIT_USER_AGENT
 )
 
-# Content filter - block vulgar/inappropriate content
-BLOCKED_KEYWORDS = [
-    "nsfw", "porn", "sex", "nude", "naked", "fuck", "shit", "ass", "dick", "cock",
-    "pussy", "damn", "hell", "bastard", "bitch", "whore", "slut", "crap",
-    "piss", "rape", "kill", "murder", "suicide", "death", "gore", "blood"
+# Additional custom words to block beyond better-profanity's defaults
+CUSTOM_BLOCKED_WORDS = [
+    "nsfw", "porn", "nude", "naked", "rape", "gore", "kill", "murder",
+    "suicide", "death", "blood", "hentai", "xxx"
 ]
+
+# Add custom words to profanity filter
+profanity.add_censor_words(CUSTOM_BLOCKED_WORDS)
 
 # Safe subreddits only (no NSFW or vulgar content)
 SAFE_SUBREDDITS = ["wholesomememes", "memes", "aww", "funny"]
@@ -45,6 +51,7 @@ SAFE_SUBREDDITS = ["wholesomememes", "memes", "aww", "funny"]
 def is_content_appropriate(title: str, post_obj=None) -> bool:
     """
     Check if content is appropriate (not vulgar or NSFW).
+    Uses better-profanity library for robust profanity detection.
 
     Args:
         title: Post title to check
@@ -55,13 +62,13 @@ def is_content_appropriate(title: str, post_obj=None) -> bool:
     """
     # Check NSFW flag if post object provided
     if post_obj and hasattr(post_obj, 'over_18') and post_obj.over_18:
+        print(f"Filtered NSFW post: {title[:50]}...")
         return False
 
-    # Check title for blocked keywords
-    title_lower = title.lower()
-    for keyword in BLOCKED_KEYWORDS:
-        if keyword in title_lower:
-            return False
+    # Use better-profanity to detect profanity (catches variations, misspellings, leetspeak)
+    if profanity.contains_profanity(title):
+        print(f"Filtered profanity in title: {profanity.censor(title)}")
+        return False
 
     return True
 
@@ -101,7 +108,7 @@ async def get_trending_memes(subreddits: List[str] = None) -> List[Dict]:
             async for post in subreddit.hot(limit=15):  # Fetch more to account for filtering
                 # Filter for image posts
                 if any(ext in post.url.lower() for ext in ['.jpg', '.jpeg', '.png', 'i.redd.it', 'i.imgur.com']):
-                    # Apply content filter
+                    # Apply content filter (profanity + NSFW check)
                     if is_content_appropriate(post.title, post):
                         trends.append({
                             "title": post.title,
@@ -111,8 +118,6 @@ async def get_trending_memes(subreddits: List[str] = None) -> List[Dict]:
                             "score": post.score,
                             "fetched_at": datetime.utcnow().isoformat()
                         })
-                    else:
-                        print(f"Filtered out inappropriate content: {post.title[:50]}...")
         except Exception as e:
             print(f"Error fetching from r/{sub}: {e}")
             continue

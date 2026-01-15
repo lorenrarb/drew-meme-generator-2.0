@@ -4,7 +4,11 @@ Auto-detect trending memes from Reddit and face-swap with Drew's face using AI.
 
 ## Features
 
-- Fetches trending memes from Reddit (r/memes, r/dankmemes)
+- Fetches trending memes from Reddit (safe subreddits only)
+- **Robust profanity filtering** using better-profanity library
+  - Blocks NSFW content automatically
+  - Detects profanity, variations, misspellings, and leetspeak
+  - Custom blocklist for inappropriate content
 - 2-hour caching for efficiency
 - AI-powered face detection and swapping using InsightFace
 - Optional LLM guidance via Grok API
