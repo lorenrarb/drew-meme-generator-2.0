@@ -88,7 +88,7 @@ async def generate_fresh_memes() -> List[Dict]:
     memes = []
     successful_swaps = 0
     target_swaps = 3  # Generate 3 memes for cache
-    max_attempts = 15
+    max_attempts = 25  # Increased from 15 to account for stricter face filtering
 
     for attempt, trend in enumerate(trends):
         if successful_swaps >= target_swaps or attempt >= max_attempts:

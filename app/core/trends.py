@@ -105,7 +105,7 @@ async def get_trending_memes(subreddits: List[str] = None) -> List[Dict]:
     for sub in subreddits:
         try:
             subreddit = await reddit.subreddit(sub)
-            async for post in subreddit.hot(limit=15):  # Fetch more to account for filtering
+            async for post in subreddit.hot(limit=25):  # Increased to account for profanity and face filtering
                 # Filter for image posts
                 if any(ext in post.url.lower() for ext in ['.jpg', '.jpeg', '.png', 'i.redd.it', 'i.imgur.com']):
                     # Apply content filter (profanity + NSFW check)

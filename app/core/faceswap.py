@@ -110,6 +110,76 @@ def get_face_swapper():
     return _face_swapper
 
 
+def is_good_face_candidate(face, img_width: int, img_height: int) -> bool:
+    """
+    Check if a detected face is a good candidate for face swapping.
+    Filters out small faces, profile views, non-human faces, etc.
+
+    Args:
+        face: InsightFace face detection object
+        img_width: Width of the image in pixels
+        img_height: Height of the image in pixels
+
+    Returns:
+        True if face is a good swap candidate, False otherwise
+    """
+    try:
+        # Calculate face bounding box dimensions
+        bbox = face.bbox.astype(int)
+        x1, y1, x2, y2 = bbox
+        face_width = x2 - x1
+        face_height = y2 - y1
+        face_area = face_width * face_height
+        img_area = img_width * img_height
+
+        # Filter 1: Face must be at least 8% of image area (prevents tiny background faces)
+        face_ratio = face_area / img_area
+        if face_ratio < 0.08:
+            print(f"✗ Face too small: {face_ratio*100:.1f}% of image (need >8%)")
+            return False
+
+        # Filter 2: Face must have high detection confidence (>0.6)
+        if hasattr(face, 'det_score') and face.det_score < 0.6:
+            print(f"✗ Low confidence: {face.det_score:.2f} (need >0.6)")
+            return False
+
+        # Filter 3: Check if face is reasonably frontal (not profile/turned away)
+        # InsightFace pose: [pitch, yaw, roll] in degrees
+        if hasattr(face, 'pose') and face.pose is not None:
+            pitch, yaw, roll = face.pose
+            # Yaw: left/right rotation - should be close to 0 for frontal faces
+            # Pitch: up/down rotation
+            if abs(yaw) > 45:  # Face turned more than 45 degrees left/right
+                print(f"✗ Profile view detected: yaw={yaw:.1f}° (need <45°)")
+                return False
+            if abs(pitch) > 35:  # Face tilted too far up/down
+                print(f"✗ Face tilted too much: pitch={pitch:.1f}° (need <35°)")
+                return False
+
+        # Filter 4: Face size should be reasonable (not extreme close-up or tiny)
+        # Face should be between 100-2000 pixels in width for good results
+        if face_width < 100:
+            print(f"✗ Face too narrow: {face_width}px (need >100px)")
+            return False
+        if face_width > 2000:
+            print(f"✗ Face too large: {face_width}px (need <2000px) - likely extreme close-up")
+            return False
+
+        # Filter 5: Aspect ratio check - faces should be roughly portrait orientation
+        aspect_ratio = face_width / face_height if face_height > 0 else 0
+        if aspect_ratio < 0.6 or aspect_ratio > 1.4:
+            print(f"✗ Unusual aspect ratio: {aspect_ratio:.2f} (need 0.6-1.4)")
+            return False
+
+        print(f"✓ Good face candidate: {face_width}x{face_height}px ({face_ratio*100:.1f}% of image)")
+        return True
+
+    except Exception as e:
+        print(f"Warning: Error checking face quality: {e}")
+        # If we can't determine quality, be conservative and reject
+        return False
+
+
 def download_image(url: str) -> Optional[np.ndarray]:
     """Download image from URL and convert to OpenCV format."""
     try:
@@ -225,6 +295,17 @@ def swap_faces(meme_url: str, source_face_path: str = None) -> Optional[str]:
             return None  # Return None instead of raising exception for better performance
 
         print(f"✓ Successfully detected {len(target_faces)} face(s) in target image")
+
+        # Filter for good face candidates (frontal, large enough, high confidence)
+        h, w = meme_img.shape[:2]
+        good_faces = [face for face in target_faces if is_good_face_candidate(face, w, h)]
+
+        if len(good_faces) == 0:
+            print(f"✗ No suitable faces for swapping (all faces filtered out as poor candidates)")
+            return None
+
+        print(f"✓ Found {len(good_faces)} good face candidate(s) out of {len(target_faces)} detected")
+        target_faces = good_faces  # Use only the good faces
 
         # Perform face swap using inswapper
         result_img = meme_img.copy()
