@@ -259,12 +259,12 @@ async def root():
         </div>
 
         <div style="text-align: center; margin-bottom: 30px;">
-            <button
-                onclick="location.reload();"
-                style="padding: 12px 24px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: bold;"
+            <a
+                href="/refresh"
+                style="display: inline-block; padding: 12px 24px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: bold; text-decoration: none;"
             >
                 🔄 Refresh Trending Memes
-            </button>
+            </a>
         </div>
 
         <div class="meme-grid">
@@ -338,6 +338,23 @@ async def health_check():
         "cache_age_hours": round(cache_age, 2) if cache_age else None,
         "cache_valid": is_cache_valid()
     }
+
+
+@app.get("/refresh")
+async def refresh_memes():
+    """
+    Clear cache and redirect to homepage to force fresh meme generation.
+    This is the user-facing refresh button endpoint.
+    """
+    try:
+        print("User requested meme refresh - clearing cache...")
+        from app.core.cache import clear_cache
+        clear_cache()
+        print("Cache cleared - redirecting to homepage for fresh memes")
+        return RedirectResponse(url="/", status_code=303)
+    except Exception as e:
+        print(f"Refresh error: {e}")
+        return RedirectResponse(url="/", status_code=303)
 
 
 @app.post("/api/refresh-cache")
