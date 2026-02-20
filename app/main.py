@@ -9,6 +9,7 @@ from typing import Dict
 
 from app.core.faceswap import swap_faces
 from app.core.celebrity import search_celebrity_images
+from pydantic import BaseModel
 
 # Cache for Drew's face to avoid reloading
 _drew_face_cache = None
@@ -230,11 +231,57 @@ SPA_HTML = """<!DOCTYPE html>
   }
   .error-msg.active { display: block; }
 
+  /* Photo Booth — demoted/muted style */
+  .card-mini {
+    background: #fff; border-radius: 10px; padding: 18px 22px;
+    border: 1px solid #e0e0e0; margin-bottom: 28px;
+  }
+  .card-mini h2 { margin-bottom: 10px; font-size: 1.05rem; color: #777; }
+  .card-mini .drop-zone {
+    padding: 24px 16px; border-width: 2px;
+  }
+  .card-mini .drop-zone p { font-size: 14px; }
+  .card-mini .drop-zone .hint { font-size: 12px; }
+
+  /* Roast panel */
+  .roast-panel {
+    margin-top: 20px; padding: 20px; background: #fafafa; border-radius: 10px;
+    border: 1px solid #e8e8e8;
+  }
+  .roast-panel h3 { font-size: 1rem; margin-bottom: 12px; }
+  .preset-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .chip {
+    padding: 8px 16px; border-radius: 20px; border: 2px solid #ddd;
+    background: #fff; cursor: pointer; font-size: 14px; font-weight: 500;
+    transition: all .2s; user-select: none;
+  }
+  .chip:hover { border-color: #007bff; color: #007bff; }
+  .chip.active { border-color: #007bff; background: #007bff; color: #fff; }
+  .roast-input {
+    width: 100%; padding: 10px 14px; border: 2px solid #ddd; border-radius: 8px;
+    font-size: 14px; outline: none; margin-bottom: 12px; transition: border-color .2s;
+  }
+  .roast-input:focus { border-color: #007bff; }
+  .btn-roast {
+    padding: 10px 22px; border: none; border-radius: 8px; cursor: pointer;
+    font-size: 15px; font-weight: 600; color: #fff; background: #e65100;
+    transition: opacity .2s;
+  }
+  .btn-roast:hover { opacity: .85; }
+  .btn-roast:disabled { opacity: .5; cursor: not-allowed; }
+  .roast-result {
+    margin-top: 16px; padding: 18px 20px; background: #fff9e6;
+    border-radius: 10px; border-left: 4px solid #e65100;
+    font-size: 15px; line-height: 1.6; white-space: pre-wrap;
+  }
+
   /* Responsive */
   @media (max-width: 600px) {
     .comparison { grid-template-columns: 1fr; }
     .photo-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
     .search-row { flex-direction: column; }
+    .preset-chips { gap: 6px; }
+    .chip { padding: 6px 12px; font-size: 13px; }
   }
 </style>
 </head>
@@ -261,9 +308,9 @@ SPA_HTML = """<!DOCTYPE html>
     <div id="celeb-result"></div>
   </div>
 
-  <!-- Photo Booth -->
-  <div class="card">
-    <h2>Photo Booth</h2>
+  <!-- Photo Booth (secondary) -->
+  <div class="card-mini">
+    <h2>Photo Booth — Upload Your Own</h2>
     <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
       <p>Drag &amp; drop a photo here, or click to select</p>
       <p class="hint">JPEG, PNG, or WebP — max 10 MB</p>
@@ -273,9 +320,6 @@ SPA_HTML = """<!DOCTYPE html>
     <div class="spinner" id="upload-spinner"></div>
     <div id="upload-result"></div>
   </div>
-
-  <!-- Future Grok Roast Section -->
-  <div id="grok-roast-section"></div>
 
 </div>
 
@@ -362,11 +406,74 @@ async function swapCelebrity(imageUrl) {
     result.innerHTML = '<div class="comparison">'
       + '<div class="side"><img src="' + data.original_path + '"><div class="label">Original</div></div>'
       + '<div class="side"><img src="' + data.swapped_path + '"><div class="label">Drew-ified!</div></div>'
-      + '</div>';
+      + '</div>'
+      + buildRoastPanel(data.original_path);
   } catch (err) {
     spinner.className = 'spinner';
     error.textContent = 'Network error — please try again.';
     error.className = 'error-msg active';
+  }
+}
+
+// ── Roast ──────────────────────────────────────────────────
+function buildRoastPanel(originalPath) {
+  // Convert relative path to absolute URL for the API
+  const absUrl = window.location.origin + originalPath;
+  return '<div class="roast-panel">'
+    + '<h3>Roast Drew</h3>'
+    + '<div class="preset-chips">'
+    + '  <span class="chip" data-preset="savage" onclick="toggleChip(this)">Extra Savage</span>'
+    + '  <span class="chip" data-preset="outfit" onclick="toggleChip(this)">Roast the Outfit</span>'
+    + '  <span class="chip" data-preset="gentle" onclick="toggleChip(this)">Be Gentle</span>'
+    + '</div>'
+    + '<input class="roast-input" type="text" placeholder="Add your own spin..." />'
+    + '<button class="btn-roast" onclick="submitRoast(this, \\'' + absUrl.replace(/'/g, "\\\\'") + '\\')">Roast Drew</button>'
+    + '<div class="spinner" id="roast-spinner"></div>'
+    + '<div class="roast-result-container"></div>'
+    + '</div>';
+}
+
+function toggleChip(el) {
+  const siblings = el.parentElement.querySelectorAll('.chip');
+  const wasActive = el.classList.contains('active');
+  siblings.forEach(c => c.classList.remove('active'));
+  if (!wasActive) el.classList.add('active');
+}
+
+async function submitRoast(btn, imageUrl) {
+  const panel = btn.closest('.roast-panel');
+  const activeChip = panel.querySelector('.chip.active');
+  const customInput = panel.querySelector('.roast-input');
+  const spinner = panel.querySelector('.spinner');
+  const resultContainer = panel.querySelector('.roast-result-container');
+
+  const preset = activeChip ? activeChip.dataset.preset : '';
+  const customSpin = customInput ? customInput.value.trim() : '';
+
+  btn.disabled = true;
+  spinner.className = 'spinner active';
+  resultContainer.innerHTML = '';
+
+  try {
+    const resp = await fetch('/api/roast', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image_url: imageUrl, preset: preset, custom_spin: customSpin })
+    });
+    const data = await resp.json();
+    spinner.className = 'spinner';
+    btn.disabled = false;
+
+    if (!resp.ok) {
+      resultContainer.innerHTML = '<div class="error-msg active">' + (data.detail || 'Roast failed') + '</div>';
+      return;
+    }
+
+    resultContainer.innerHTML = '<div class="roast-result">' + data.roast + '</div>';
+  } catch (err) {
+    spinner.className = 'spinner';
+    btn.disabled = false;
+    resultContainer.innerHTML = '<div class="error-msg active">Network error — please try again.</div>';
   }
 }
 
@@ -423,7 +530,8 @@ async function uploadFile(file) {
     result.innerHTML = '<div class="comparison">'
       + '<div class="side"><img src="' + data.original_path + '"><div class="label">Original</div></div>'
       + '<div class="side"><img src="' + data.swapped_path + '"><div class="label">Drew-ified!</div></div>'
-      + '</div>';
+      + '</div>'
+      + buildRoastPanel(data.original_path);
   } catch (err) {
     spinner.className = 'spinner';
     error.textContent = 'Network error — please try again.';
@@ -520,6 +628,75 @@ async def upload_swap(file: UploadFile = File(...)):
     except Exception as e:
         print(f"Upload swap error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Roast Endpoint ────────────────────────────────────────────
+
+class RoastRequest(BaseModel):
+    image_url: str
+    preset: str = ""
+    custom_spin: str = ""
+
+ROAST_SYSTEM_PROMPT = """You are a workplace-appropriate roast comedian. You're roasting someone named Drew based on a photo.
+Drew's known traits: risk averse, has luscious bangs, enormous calves, acts older than he is,
+conservative spender, and extremely long-winded.
+
+Look at the photo and call out specific details — attire, facial expression, pose, setting —
+then weave them into a roast that mixes those observations with Drew's known traits.
+Keep it professional enough for a workplace but make it sting. 2-3 paragraphs max."""
+
+PRESET_GUIDANCE = {
+    "savage": "Turn up the heat — be extra savage and ruthless with the roast. Don't hold back.",
+    "outfit": "Focus heavily on what Drew is wearing in the photo. Roast the outfit, accessories, and overall fashion choices.",
+    "gentle": "Be gentle — more playful teasing than a hard roast. Keep it lighthearted and fun.",
+}
+
+@app.post("/api/roast")
+async def roast_drew(body: RoastRequest):
+    """Generate a Grok-powered roast of Drew based on a photo."""
+    grok_api_key = os.getenv("GROK_API_KEY")
+    if not grok_api_key:
+        raise HTTPException(status_code=503, detail="Roast feature unavailable — GROK_API_KEY not configured")
+
+    if not body.image_url:
+        raise HTTPException(status_code=400, detail="image_url is required")
+
+    try:
+        from openai import OpenAI
+        client = OpenAI(
+            api_key=grok_api_key,
+            base_url="https://api.x.ai/v1"
+        )
+
+        # Build user message with optional preset and custom spin
+        user_parts = ["Roast Drew based on this photo."]
+        if body.preset and body.preset in PRESET_GUIDANCE:
+            user_parts.append(PRESET_GUIDANCE[body.preset])
+        if body.custom_spin:
+            user_parts.append(f"Additional direction: {body.custom_spin}")
+
+        response = client.chat.completions.create(
+            model="grok-2-vision-1212",
+            messages=[
+                {"role": "system", "content": ROAST_SYSTEM_PROMPT},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "image_url", "image_url": {"url": body.image_url}},
+                        {"type": "text", "text": " ".join(user_parts)},
+                    ],
+                },
+            ],
+            max_tokens=500,
+            timeout=30,
+        )
+
+        roast_text = response.choices[0].message.content
+        return {"roast": roast_text}
+
+    except Exception as e:
+        print(f"Roast error: {e}")
+        raise HTTPException(status_code=500, detail=f"Roast generation failed: {str(e)}")
 
 
 # ── Utility Endpoints ─────────────────────────────────────────

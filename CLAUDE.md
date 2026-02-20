@@ -37,6 +37,7 @@ GET  /                       → Single-page HTML app (all JS/CSS inline)
 GET  /api/celebrity/search   → ?name=Tom+Hanks → JSON with up to 10 image URLs
 POST /api/celebrity/swap     → {image_url: "..."} → JSON with original + swapped paths
 POST /api/upload/swap        → FormData file upload → JSON with original + swapped paths
+POST /api/roast              → {image_url, preset?, custom_spin?} → {roast: "..."}
 GET  /api/swap               → ?url=... → Utility endpoint for direct URL face swap
 GET  /health                 → Health check
 ```
@@ -55,6 +56,14 @@ GET  /health                 → Health check
 - Wikipedia API with `imlimit=50` for broader image discovery
 - DuckDuckGo fallback when Wikimedia returns < 5 results
 - Filters out icons, logos, signatures, maps, charts
+
+**`POST /api/roast`** (Grok Vision Roast)
+- Sends the original celebrity/upload photo to Grok `grok-2-vision-1212` via OpenAI SDK
+- System prompt includes Drew's roastable traits (risk averse, luscious bangs, enormous calves, acts old, cheap, long-winded)
+- Presets: `savage`, `outfit`, `gentle` — inject tone guidance into user message
+- Optional `custom_spin` free-text appended as additional user direction
+- Requires `GROK_API_KEY` env var; returns 503 if not set
+- 30s timeout on vision request
 
 **`app/core/faceswap.py`** (Face Swap Engine)
 - Lazy-loads InsightFace models (`get_face_app()`, `get_face_swapper()`)
@@ -82,7 +91,7 @@ GET  /health                 → Health check
 ## Environment Variables
 
 Optional:
-- `GROK_API_KEY` — Grok API key (reserved for future Grok roast feature)
+- `GROK_API_KEY` — Grok API key for the roast feature (uses `grok-2-vision-1212` via `api.x.ai`)
 - `DREW_FACE_PATH` — Path to Drew's face image (default: `./assets/drew_face.jpg`)
 - `PORT` or `FLASK_PORT` — Server port (default: 5000)
 
