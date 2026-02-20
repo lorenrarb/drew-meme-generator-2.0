@@ -6,6 +6,9 @@ import os
 import time
 import urllib.parse
 from typing import Dict
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from app.core.faceswap import swap_faces
 from app.core.celebrity import search_celebrity_images
@@ -56,6 +59,12 @@ async def startup_event():
     """Pre-warm face detection models on startup for faster first request."""
     print("Starting up Drew Meme Generator 2.0...")
     print("Pre-warming face detection models...")
+
+    # Check Grok API key availability
+    if os.getenv("GROK_API_KEY"):
+        print("GROK_API_KEY is set — roast feature enabled")
+    else:
+        print("WARNING: GROK_API_KEY not set — roast feature will be unavailable")
 
     try:
         from app.core.faceswap import get_face_app, get_face_swapper
@@ -231,17 +240,41 @@ SPA_HTML = """<!DOCTYPE html>
   }
   .error-msg.active { display: block; }
 
-  /* Photo Booth — demoted/muted style */
-  .card-mini {
-    background: #fff; border-radius: 10px; padding: 18px 22px;
-    border: 1px solid #e0e0e0; margin-bottom: 28px;
+  /* Photo Booth — compact inline bar */
+  .upload-bar {
+    display: flex; align-items: center; gap: 12px;
+    background: #fff; border-radius: 10px; padding: 12px 18px;
+    border: 1px solid #e0e0e0; margin-bottom: 24px; flex-wrap: wrap;
   }
-  .card-mini h2 { margin-bottom: 10px; font-size: 1.05rem; color: #777; }
-  .card-mini .drop-zone {
-    padding: 24px 16px; border-width: 2px;
+  .upload-bar .upload-label {
+    font-size: 13px; color: #888; white-space: nowrap;
   }
-  .card-mini .drop-zone p { font-size: 14px; }
-  .card-mini .drop-zone .hint { font-size: 12px; }
+  .upload-bar .btn-upload {
+    padding: 8px 18px; border: 2px dashed #ccc; border-radius: 8px;
+    background: #fafafa; cursor: pointer; font-size: 13px; color: #666;
+    transition: border-color .2s, background .2s; white-space: nowrap;
+  }
+  .upload-bar .btn-upload:hover { border-color: #007bff; background: #f0f7ff; color: #007bff; }
+  .upload-bar .upload-hint { font-size: 11px; color: #bbb; }
+  #upload-result .comparison { margin-top: 16px; }
+
+  /* Autocomplete */
+  .search-wrapper { position: relative; flex: 1; }
+  .search-wrapper input { width: 100%; }
+  .autocomplete-list {
+    position: absolute; top: 100%; left: 0; right: 0; z-index: 10;
+    background: #fff; border: 1px solid #ddd; border-top: none;
+    border-radius: 0 0 8px 8px; max-height: 220px; overflow-y: auto;
+    box-shadow: 0 4px 12px rgba(0,0,0,.1); display: none;
+  }
+  .autocomplete-list.active { display: block; }
+  .autocomplete-item {
+    padding: 10px 16px; cursor: pointer; font-size: 15px;
+    transition: background .15s;
+  }
+  .autocomplete-item:hover, .autocomplete-item.highlighted {
+    background: #f0f7ff; color: #007bff;
+  }
 
   /* Roast panel */
   .roast-panel {
@@ -282,14 +315,15 @@ SPA_HTML = """<!DOCTYPE html>
     .search-row { flex-direction: column; }
     .preset-chips { gap: 6px; }
     .chip { padding: 6px 12px; font-size: 13px; }
+    .upload-bar { flex-direction: column; text-align: center; }
   }
 </style>
 </head>
 <body>
 
 <header>
-  <h1>Drew Meme Generator</h1>
-  <p>Swap Drew's face onto celebrity photos or your own uploads</p>
+  <h1>The Drew-ification Machine</h1>
+  <p>Steal any celebrity's look. Then roast Drew for wearing it.</p>
 </header>
 
 <div class="container">
@@ -298,7 +332,10 @@ SPA_HTML = """<!DOCTYPE html>
   <div class="card">
     <h2>Celebrity Face Swap</h2>
     <div class="search-row">
-      <input type="text" id="celeb-input" placeholder="Enter celebrity name (e.g. Tom Hanks, Taylor Swift)..." />
+      <div class="search-wrapper">
+        <input type="text" id="celeb-input" placeholder="Start typing a celebrity name..." autocomplete="off" />
+        <div class="autocomplete-list" id="autocomplete-list"></div>
+      </div>
       <button class="btn btn-blue" id="celeb-search-btn" onclick="searchCelebrity()">Search</button>
     </div>
     <div class="error-msg" id="celeb-error"></div>
@@ -308,29 +345,101 @@ SPA_HTML = """<!DOCTYPE html>
     <div id="celeb-result"></div>
   </div>
 
-  <!-- Photo Booth (secondary) -->
-  <div class="card-mini">
-    <h2>Photo Booth — Upload Your Own</h2>
-    <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
-      <p>Drag &amp; drop a photo here, or click to select</p>
-      <p class="hint">JPEG, PNG, or WebP — max 10 MB</p>
-    </div>
+  <!-- Photo Booth — compact bar -->
+  <div class="upload-bar" id="drop-zone">
+    <span class="upload-label">Or use your own photo:</span>
+    <span class="btn-upload" onclick="document.getElementById('file-input').click()">Choose file or drop here</span>
+    <span class="upload-hint">JPEG, PNG, WebP &middot; max 10 MB</span>
     <input type="file" id="file-input" accept="image/jpeg,image/png,image/webp" style="display:none" />
-    <div class="error-msg" id="upload-error"></div>
-    <div class="spinner" id="upload-spinner"></div>
-    <div id="upload-result"></div>
   </div>
+  <div class="error-msg" id="upload-error"></div>
+  <div class="spinner" id="upload-spinner"></div>
+  <div id="upload-result"></div>
 
 </div>
 
 <script>
-// ── Celebrity Search ───────────────────────────────────────
+// ── Autocomplete ──────────────────────────────────────────
 const celebInput = document.getElementById('celeb-input');
-celebInput.addEventListener('keydown', e => { if (e.key === 'Enter') searchCelebrity(); });
+const acList = document.getElementById('autocomplete-list');
+let acTimer = null;
+let acIndex = -1;
+
+celebInput.addEventListener('input', () => {
+  clearTimeout(acTimer);
+  const q = celebInput.value.trim();
+  if (q.length < 2) { acList.className = 'autocomplete-list'; return; }
+  acTimer = setTimeout(() => fetchSuggestions(q), 250);
+});
+
+celebInput.addEventListener('keydown', e => {
+  const items = acList.querySelectorAll('.autocomplete-item');
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    acIndex = Math.min(acIndex + 1, items.length - 1);
+    highlightItem(items);
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    acIndex = Math.max(acIndex - 1, 0);
+    highlightItem(items);
+  } else if (e.key === 'Enter') {
+    if (acIndex >= 0 && items[acIndex]) {
+      celebInput.value = items[acIndex].textContent;
+      acList.className = 'autocomplete-list';
+      acIndex = -1;
+    }
+    searchCelebrity();
+  } else if (e.key === 'Escape') {
+    acList.className = 'autocomplete-list';
+    acIndex = -1;
+  }
+});
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('.search-wrapper')) {
+    acList.className = 'autocomplete-list';
+    acIndex = -1;
+  }
+});
+
+function highlightItem(items) {
+  items.forEach((el, i) => el.classList.toggle('highlighted', i === acIndex));
+}
+
+async function fetchSuggestions(query) {
+  try {
+    const url = 'https://en.wikipedia.org/w/api.php?action=opensearch&limit=6&namespace=0&format=json&origin=*&search='
+      + encodeURIComponent(query);
+    const resp = await fetch(url);
+    const data = await resp.json();
+    const names = data[1] || [];
+    acList.innerHTML = '';
+    acIndex = -1;
+    if (names.length === 0) { acList.className = 'autocomplete-list'; return; }
+    names.forEach(name => {
+      const div = document.createElement('div');
+      div.className = 'autocomplete-item';
+      div.textContent = name;
+      div.onclick = () => {
+        celebInput.value = name;
+        acList.className = 'autocomplete-list';
+        searchCelebrity();
+      };
+      acList.appendChild(div);
+    });
+    acList.className = 'autocomplete-list active';
+  } catch (err) { /* silent fail for suggestions */ }
+}
+
+// ── Celebrity Search ───────────────────────────────────────
 
 async function searchCelebrity() {
   const name = celebInput.value.trim();
   if (!name) return;
+
+  // Dismiss autocomplete
+  acList.className = 'autocomplete-list';
+  acIndex = -1;
 
   const grid = document.getElementById('celeb-grid');
   const result = document.getElementById('celeb-result');
@@ -481,11 +590,11 @@ async function submitRoast(btn, imageUrl) {
 const dropZone = document.getElementById('drop-zone');
 const fileInput = document.getElementById('file-input');
 
-dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
-dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.style.borderColor = '#007bff'; dropZone.style.background = '#f0f7ff'; });
+dropZone.addEventListener('dragleave', () => { dropZone.style.borderColor = ''; dropZone.style.background = ''; });
 dropZone.addEventListener('drop', e => {
   e.preventDefault();
-  dropZone.classList.remove('dragover');
+  dropZone.style.borderColor = ''; dropZone.style.background = '';
   if (e.dataTransfer.files.length) uploadFile(e.dataTransfer.files[0]);
 });
 fileInput.addEventListener('change', () => { if (fileInput.files.length) uploadFile(fileInput.files[0]); });
