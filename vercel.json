@@ -13,13 +13,7 @@
     }
   ],
   "env": {
-    "REDDIT_CLIENT_ID": "@reddit_client_id",
-    "REDDIT_CLIENT_SECRET": "@reddit_client_secret",
-    "REDDIT_USER_AGENT": "@reddit_user_agent",
     "GROK_API_KEY": "@grok_api_key",
-    "DREW_FACE_PATH": "./assets/drew_face.jpg",
-    "CACHE_TTL_HOURS": "2",
-    "FLASK_ENV": "production",
-    "FLASK_PORT": "5000"
+    "DREW_FACE_PATH": "./assets/drew_face.jpg"
   }
 }

@@ -132,10 +132,10 @@ def is_good_face_candidate(face, img_width: int, img_height: int) -> bool:
         face_area = face_width * face_height
         img_area = img_width * img_height
 
-        # Filter 1: Face must be at least 8% of image area (prevents tiny background faces)
+        # Filter 1: Face must be at least 2% of image area (prevents tiny background faces)
         face_ratio = face_area / img_area
-        if face_ratio < 0.08:
-            print(f"✗ Face too small: {face_ratio*100:.1f}% of image (need >8%)")
+        if face_ratio < 0.02:
+            print(f"✗ Face too small: {face_ratio*100:.1f}% of image (need >2%)")
             return False
 
         # Filter 2: Face must have high detection confidence (>0.6)

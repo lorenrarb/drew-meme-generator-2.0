@@ -10,17 +10,9 @@ services:
       mountPath: /opt/render/.insightface
       sizeGB: 1
     envVars:
-      - key: REDDIT_CLIENT_ID
-        sync: false
-      - key: REDDIT_CLIENT_SECRET
-        sync: false
-      - key: REDDIT_USER_AGENT
-        value: drewmemeapp
       - key: GROK_API_KEY
         sync: false
       - key: DREW_FACE_PATH
         value: ./assets/drew_face.jpg
-      - key: CACHE_TTL_HOURS
-        value: "2"
       - key: PYTHON_VERSION
         value: "3.12.0"
