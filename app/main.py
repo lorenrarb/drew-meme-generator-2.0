@@ -307,6 +307,19 @@ SPA_HTML = """<!DOCTYPE html>
     border-radius: 10px; border-left: 4px solid #e65100;
     font-size: 15px; line-height: 1.6; white-space: pre-wrap;
   }
+  .toast-result {
+    margin-top: 16px; padding: 18px 20px; background: #e8f5e9;
+    border-radius: 10px; border-left: 4px solid #2e7d32;
+    font-size: 15px; line-height: 1.6; white-space: pre-wrap;
+  }
+  .btn-toast {
+    padding: 10px 22px; border: none; border-radius: 8px; cursor: pointer;
+    font-size: 15px; font-weight: 600; color: #fff; background: #2e7d32;
+    transition: opacity .2s; margin-left: 8px;
+  }
+  .btn-toast:hover { opacity: .85; }
+  .btn-toast:disabled { opacity: .5; cursor: not-allowed; }
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
 
   /* Responsive */
   @media (max-width: 600px) {
@@ -526,15 +539,19 @@ async function swapCelebrity(imageUrl) {
 
 // ── Roast ──────────────────────────────────────────────────
 function buildRoastPanel(originalPath) {
+  const safePath = originalPath.replace(/'/g, "\\\\'");
   return '<div class="roast-panel">'
-    + '<h3>Roast Drew</h3>'
+    + '<h3>Roast or Toast Drew</h3>'
     + '<div class="preset-chips">'
     + '  <span class="chip" data-preset="savage" onclick="toggleChip(this)">Extra Savage</span>'
     + '  <span class="chip" data-preset="outfit" onclick="toggleChip(this)">Roast the Outfit</span>'
     + '  <span class="chip" data-preset="gentle" onclick="toggleChip(this)">Be Gentle</span>'
     + '</div>'
     + '<input class="roast-input" type="text" placeholder="Add your own spin..." />'
-    + '<button class="btn-roast" onclick="submitRoast(this, \\'' + originalPath.replace(/'/g, "\\\\'") + '\\')">Roast Drew</button>'
+    + '<div class="btn-row">'
+    + '  <button class="btn-roast" onclick="submitRoast(this, \\'' + safePath + '\\')">Roast Drew</button>'
+    + '  <button class="btn-toast" onclick="submitToast(this, \\'' + safePath + '\\')">Toast Drew</button>'
+    + '</div>'
     + '<div class="spinner" id="roast-spinner"></div>'
     + '<div class="roast-result-container"></div>'
     + '</div>';
@@ -577,6 +594,41 @@ async function submitRoast(btn, imageUrl) {
     }
 
     resultContainer.innerHTML = '<div class="roast-result">' + data.roast + '</div>';
+  } catch (err) {
+    spinner.className = 'spinner';
+    btn.disabled = false;
+    resultContainer.innerHTML = '<div class="error-msg active">Network error — please try again.</div>';
+  }
+}
+
+async function submitToast(btn, imagePath) {
+  const panel = btn.closest('.roast-panel');
+  const customInput = panel.querySelector('.roast-input');
+  const spinner = panel.querySelector('.spinner');
+  const resultContainer = panel.querySelector('.roast-result-container');
+
+  const customSpin = customInput ? customInput.value.trim() : '';
+
+  btn.disabled = true;
+  spinner.className = 'spinner active';
+  resultContainer.innerHTML = '';
+
+  try {
+    const resp = await fetch('/api/toast', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image_path: imagePath, custom_spin: customSpin })
+    });
+    const data = await resp.json();
+    spinner.className = 'spinner';
+    btn.disabled = false;
+
+    if (!resp.ok) {
+      resultContainer.innerHTML = '<div class="error-msg active">' + (data.detail || 'Toast failed') + '</div>';
+      return;
+    }
+
+    resultContainer.innerHTML = '<div class="toast-result">' + data.toast + '</div>';
   } catch (err) {
     spinner.className = 'spinner';
     btn.disabled = false;
@@ -833,6 +885,89 @@ async def roast_drew(body: RoastRequest):
     except Exception as e:
         print(f"Roast error: {e}")
         raise HTTPException(status_code=500, detail=f"Roast generation failed: {str(e)}")
+
+
+# ── Toast Endpoint ────────────────────────────────────────────
+
+class ToastRequest(BaseModel):
+    image_path: str
+    custom_spin: str = ""
+
+DREW_NICE_TRAITS = [
+    "genuinely thoughtful — he thinks things through because he cares about getting it right",
+    "has absolutely magnificent bangs that honestly look great",
+    "has calves that could win bodybuilding competitions — the man never skips leg day",
+    "has an old soul in the best way — wise, dependable, the guy you'd trust with anything",
+    "financially responsible and smart with money — the kind of friend who'll retire comfortably",
+    "thorough and detailed — when Drew explains something, you get the FULL picture and walk away smarter",
+]
+
+TOAST_SYSTEM_PROMPT = """You are a heartfelt but funny hype man. You're toasting (complimenting) someone named Drew based on a photo.
+
+Your PRIMARY job is to gas Drew up based on what you SEE in the photo — the attire, expression, pose,
+setting, how he's absolutely pulling off whatever look this is. Find the good in every detail.
+
+Drew also has one or two genuinely great qualities (provided below) — weave them in naturally.
+The toast should feel specific to THIS photo, not generic flattery. Be warm, genuine, and funny
+(in a loving way). Make Drew feel like a million bucks. 2-3 paragraphs max."""
+
+@app.post("/api/toast")
+async def toast_drew(body: ToastRequest):
+    """Generate a Grok-powered toast (compliment) of Drew based on a photo."""
+    grok_api_key = os.getenv("Grok_API_KEY")
+    if not grok_api_key:
+        raise HTTPException(status_code=503, detail="Toast feature unavailable — Grok_API_KEY not configured")
+
+    if not body.image_path:
+        raise HTTPException(status_code=400, detail="image_path is required")
+
+    import base64
+    local_path = body.image_path.lstrip("/")
+    if not os.path.isfile(local_path):
+        raise HTTPException(status_code=404, detail="Image file not found")
+
+    with open(local_path, "rb") as f:
+        img_bytes = f.read()
+    b64 = base64.b64encode(img_bytes).decode("utf-8")
+    data_url = f"data:image/jpeg;base64,{b64}"
+
+    try:
+        from openai import OpenAI
+        import random
+        client = OpenAI(
+            api_key=grok_api_key,
+            base_url="https://api.x.ai/v1"
+        )
+
+        picked = random.sample(DREW_NICE_TRAITS, k=random.randint(1, 2))
+        trait_text = "Drew qualities to highlight (only these): " + "; ".join(picked)
+
+        user_parts = ["Toast Drew based on this photo. Hype him up!", trait_text]
+        if body.custom_spin:
+            user_parts.append(f"Additional direction: {body.custom_spin}")
+
+        response = client.chat.completions.create(
+            model="grok-2-vision-1212",
+            messages=[
+                {"role": "system", "content": TOAST_SYSTEM_PROMPT},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "image_url", "image_url": {"url": data_url}},
+                        {"type": "text", "text": " ".join(user_parts)},
+                    ],
+                },
+            ],
+            max_tokens=500,
+            timeout=30,
+        )
+
+        toast_text = response.choices[0].message.content
+        return {"toast": toast_text}
+
+    except Exception as e:
+        print(f"Toast error: {e}")
+        raise HTTPException(status_code=500, detail=f"Toast generation failed: {str(e)}")
 
 
 # ── Utility Endpoints ─────────────────────────────────────────
