@@ -103,13 +103,14 @@ def search_wikimedia_images(celebrity_name: str, num_images: int = 10) -> List[s
             print(f"No suitable images found for {celebrity_name}")
             return []
 
-        # Resolve actual URLs with dimensions to filter out non-photo images
+        # Batch resolve URLs + dimensions in one API call (pipe-separated titles, max 50)
         image_urls = []
-        # Batch resolve in groups of 50 (API limit) for efficiency
-        for img_title in photo_images:
+        batch_size = 50
+        for i in range(0, len(photo_images), batch_size):
+            batch = photo_images[i:i + batch_size]
             url_params = {
                 "action": "query",
-                "titles": img_title,
+                "titles": "|".join(batch),
                 "prop": "imageinfo",
                 "iiprop": "url|size",
                 "format": "json"
@@ -119,27 +120,26 @@ def search_wikimedia_images(celebrity_name: str, num_images: int = 10) -> List[s
             response.raise_for_status()
             url_data = response.json()
 
-            pages = url_data.get("query", {}).get("pages", {})
-            if pages:
-                page = list(pages.values())[0]
+            for page in url_data.get("query", {}).get("pages", {}).values():
                 imageinfo = page.get("imageinfo", [])
-                if imageinfo:
-                    info = imageinfo[0]
-                    img_url = info.get("url")
-                    width = info.get("width", 0)
-                    height = info.get("height", 0)
+                if not imageinfo:
+                    continue
+                info = imageinfo[0]
+                img_url = info.get("url")
+                width = info.get("width", 0)
+                height = info.get("height", 0)
 
-                    # Skip tiny images (icons/thumbnails) and very wide banners
-                    if width < 200 or height < 200:
+                # Skip tiny images (icons/thumbnails)
+                if width < 200 or height < 200:
+                    continue
+                # Skip extreme aspect ratios (panoramas, banners, infographics)
+                if width > 0 and height > 0:
+                    ratio = width / height
+                    if ratio > 2.5 or ratio < 0.25:
                         continue
-                    # Skip extreme aspect ratios (panoramas, banners, infographics)
-                    if width > 0 and height > 0:
-                        ratio = width / height
-                        if ratio > 2.5 or ratio < 0.25:
-                            continue
 
-                    if img_url:
-                        image_urls.append(img_url)
+                if img_url:
+                    image_urls.append(img_url)
 
             if len(image_urls) >= num_images:
                 break
