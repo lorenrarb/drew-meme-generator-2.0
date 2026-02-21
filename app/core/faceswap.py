@@ -11,7 +11,7 @@ load_dotenv()
 
 # Config
 DREW_FACE_PATH = os.getenv("DREW_FACE_PATH", "./assets/drew_face.jpg")
-GROK_API_KEY = os.getenv("GROK_API_KEY")
+Grok_API_KEY = os.getenv("Grok_API_KEY")
 
 # Lazy load insightface models to avoid startup delays
 _face_app = None
@@ -383,13 +383,13 @@ def llm_guide_swap(meme_description: str) -> dict:
     Optional: Use Grok API to analyze meme and guide face swap.
     Returns metadata about the meme for better processing.
     """
-    if not GROK_API_KEY:
+    if not Grok_API_KEY:
         return {"guided": False, "reason": "No API key"}
 
     try:
         from openai import OpenAI
         client = OpenAI(
-            api_key=GROK_API_KEY,
+            api_key=Grok_API_KEY,
             base_url="https://api.x.ai/v1"
         )
 

@@ -10,7 +10,7 @@ services:
       mountPath: /opt/render/.insightface
       sizeGB: 1
     envVars:
-      - key: GROK_API_KEY
+      - key: Grok_API_KEY
         sync: false
       - key: DREW_FACE_PATH
         value: ./assets/drew_face.jpg

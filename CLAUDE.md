@@ -62,7 +62,7 @@ GET  /health                 → Health check
 - System prompt includes Drew's roastable traits (risk averse, luscious bangs, enormous calves, acts old, cheap, long-winded)
 - Presets: `savage`, `outfit`, `gentle` — inject tone guidance into user message
 - Optional `custom_spin` free-text appended as additional user direction
-- Requires `GROK_API_KEY` env var; returns 503 if not set
+- Requires `Grok_API_KEY` env var; returns 503 if not set
 - 30s timeout on vision request
 
 **`app/core/faceswap.py`** (Face Swap Engine)
@@ -91,7 +91,7 @@ GET  /health                 → Health check
 ## Environment Variables
 
 Optional:
-- `GROK_API_KEY` — Grok API key for the roast feature (uses `grok-2-vision-1212` via `api.x.ai`)
+- `Grok_API_KEY` — Grok API key for the roast feature (uses `grok-2-vision-1212` via `api.x.ai`)
 - `DREW_FACE_PATH` — Path to Drew's face image (default: `./assets/drew_face.jpg`)
 - `PORT` or `FLASK_PORT` — Server port (default: 5000)
 

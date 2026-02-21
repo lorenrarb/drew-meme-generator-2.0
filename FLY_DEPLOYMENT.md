@@ -29,7 +29,7 @@ Railway offers 8GB RAM instances and is perfect for ML apps.
      - `REDDIT_CLIENT_ID`
      - `REDDIT_CLIENT_SECRET`
      - `REDDIT_USER_AGENT`
-     - `GROK_API_KEY`
+     - `Grok_API_KEY`
      - `DREW_FACE_PATH=./assets/drew_face.jpg`
      - `CACHE_TTL_HOURS=2`
 
@@ -70,7 +70,7 @@ Best option for ML apps - completely free with GPU acceleration.
 4. **Add secrets** in Space settings:
    - REDDIT_CLIENT_ID
    - REDDIT_CLIENT_SECRET
-   - GROK_API_KEY
+   - Grok_API_KEY
 
 **Note**: Would need to convert FastAPI app to Gradio/Streamlit interface (I can help!)
 
@@ -103,7 +103,7 @@ Good balance of features and pricing.
    ```bash
    fly secrets set REDDIT_CLIENT_ID=xxx
    fly secrets set REDDIT_CLIENT_SECRET=xxx
-   fly secrets set GROK_API_KEY=xxx
+   fly secrets set Grok_API_KEY=xxx
    fly secrets set REDDIT_USER_AGENT=drewmemeapp
    ```
 

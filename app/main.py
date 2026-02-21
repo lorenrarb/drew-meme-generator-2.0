@@ -61,10 +61,10 @@ async def startup_event():
     print("Pre-warming face detection models...")
 
     # Check Grok API key availability
-    if os.getenv("GROK_API_KEY"):
-        print("GROK_API_KEY is set — roast feature enabled")
+    if os.getenv("Grok_API_KEY"):
+        print("Grok_API_KEY is set — roast feature enabled")
     else:
-        print("WARNING: GROK_API_KEY not set — roast feature will be unavailable")
+        print("WARNING: Grok_API_KEY not set — roast feature will be unavailable")
 
     try:
         from app.core.faceswap import get_face_app, get_face_swapper
@@ -763,9 +763,9 @@ PRESET_GUIDANCE = {
 @app.post("/api/roast")
 async def roast_drew(body: RoastRequest):
     """Generate a Grok-powered roast of Drew based on a photo."""
-    grok_api_key = os.getenv("GROK_API_KEY")
+    grok_api_key = os.getenv("Grok_API_KEY")
     if not grok_api_key:
-        raise HTTPException(status_code=503, detail="Roast feature unavailable — GROK_API_KEY not configured")
+        raise HTTPException(status_code=503, detail="Roast feature unavailable — Grok_API_KEY not configured")
 
     if not body.image_url:
         raise HTTPException(status_code=400, detail="image_url is required")
@@ -832,7 +832,7 @@ async def api_swap(url: str) -> Dict:
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
-    grok_set = bool(os.getenv("GROK_API_KEY"))
+    grok_set = bool(os.getenv("Grok_API_KEY"))
     return {"status": "healthy", "service": "drew-meme-generator", "version": "2.0.0", "grok_available": grok_set}
 
 

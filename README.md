@@ -33,7 +33,7 @@ Your `.env` file should contain:
 REDDIT_CLIENT_ID=your_client_id
 REDDIT_CLIENT_SECRET=your_secret
 REDDIT_USER_AGENT=drewmemeapp
-GROK_API_KEY=your_grok_key
+Grok_API_KEY=your_grok_key
 DREW_FACE_PATH=./assets/drew_face.jpg
 CACHE_TTL_HOURS=2
 FLASK_PORT=5000
@@ -85,7 +85,7 @@ vercel --prod
    - REDDIT_CLIENT_ID
    - REDDIT_CLIENT_SECRET
    - REDDIT_USER_AGENT
-   - GROK_API_KEY
+   - Grok_API_KEY
 
 4. Add custom domain (www.drewgeiger.com) in Vercel dashboard
 

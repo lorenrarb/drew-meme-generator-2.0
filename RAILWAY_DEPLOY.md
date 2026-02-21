@@ -16,7 +16,7 @@ Go to your Railway project → Variables tab and add:
 REDDIT_CLIENT_ID=your_reddit_client_id
 REDDIT_CLIENT_SECRET=your_reddit_client_secret
 REDDIT_USER_AGENT=drewmemeapp
-GROK_API_KEY=your_grok_api_key
+Grok_API_KEY=your_grok_api_key
 DREW_FACE_PATH=./assets/drew_face.jpg
 FLASK_ENV=production
 ```

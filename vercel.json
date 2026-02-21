@@ -13,7 +13,7 @@
     }
   ],
   "env": {
-    "GROK_API_KEY": "@grok_api_key",
+    "Grok_API_KEY": "@grok_api_key",
     "DREW_FACE_PATH": "./assets/drew_face.jpg"
   }
 }
