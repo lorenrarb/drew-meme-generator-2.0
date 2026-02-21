@@ -832,7 +832,8 @@ async def api_swap(url: str) -> Dict:
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
-    return {"status": "healthy", "service": "drew-meme-generator", "version": "2.0.0"}
+    grok_set = bool(os.getenv("GROK_API_KEY"))
+    return {"status": "healthy", "service": "drew-meme-generator", "version": "2.0.0", "grok_available": grok_set}
 
 
 if __name__ == "__main__":
