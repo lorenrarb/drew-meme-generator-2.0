@@ -744,12 +744,25 @@ class RoastRequest(BaseModel):
     preset: str = ""
     custom_spin: str = ""
 
-ROAST_SYSTEM_PROMPT = """You are a workplace-appropriate roast comedian. You're roasting someone named Drew based on a photo.
-Drew's known traits: risk averse, has luscious bangs, enormous calves, acts older than he is,
-conservative spender, and extremely long-winded.
+DREW_TRAITS = [
+    "incredibly risk averse — won't try anything without a 47-step safety analysis",
+    "has luscious bangs that he clearly spends more time on than his personality",
+    "has enormous calves that are doing all the heavy lifting his upper body won't",
+    "acts like he's 65 even though he's nowhere close",
+    "so conservative with money he'd negotiate the price of a free sample",
+    "so long-winded he could filibuster a casual conversation",
+]
 
-Look at the photo and call out specific details — attire, facial expression, pose, setting —
-then weave them into a roast that mixes those observations with Drew's known traits.
+ROAST_SYSTEM_PROMPT = """You are a workplace-appropriate roast comedian. You're roasting someone named Drew based on a photo.
+
+Your PRIMARY job is to roast what you SEE in the photo — the attire, facial expression, pose, setting,
+how Drew looks compared to whoever this celebrity originally was, and any ridiculous visual details.
+The photo-specific observations should be the backbone of the roast.
+
+Drew also has one or two known traits you can sprinkle in (provided below), but don't list them all —
+just weave in the one or two that connect naturally to what's in the photo. The roast should feel
+like it's about THIS specific photo, not a generic list of Drew facts.
+
 Keep it professional enough for a workplace but make it sting. 2-3 paragraphs max."""
 
 PRESET_GUIDANCE = {
@@ -786,8 +799,13 @@ async def roast_drew(body: RoastRequest):
             base_url="https://api.x.ai/v1"
         )
 
+        # Pick 1-2 random traits per roast for variety
+        import random
+        picked = random.sample(DREW_TRAITS, k=random.randint(1, 2))
+        trait_text = "Drew traits to work in (only these, not others): " + "; ".join(picked)
+
         # Build user message with optional preset and custom spin
-        user_parts = ["Roast Drew based on this photo."]
+        user_parts = ["Roast Drew based on this photo.", trait_text]
         if body.preset and body.preset in PRESET_GUIDANCE:
             user_parts.append(PRESET_GUIDANCE[body.preset])
         if body.custom_spin:
