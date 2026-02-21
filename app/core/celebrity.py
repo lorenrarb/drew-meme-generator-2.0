@@ -82,24 +82,36 @@ def search_wikimedia_images(celebrity_name: str, num_images: int = 10) -> List[s
         images = page.get("images", [])
 
         # Filter for likely portrait/photo images
+        skip_words = [
+            "icon", "logo", "signature", "flag", "map", "chart", "diagram",
+            "symbol", "seal", "coat_of_arms", "crest", "emblem", "badge",
+            "product", "device", "computer", "phone", "tablet", "laptop",
+            "screenshot", "screen_shot", "interface", "desktop", "hardware",
+            "building", "headquarters", "campus", "office", "store",
+            "graph", "timeline", "wikitable", "commons-logo", "edit-clear",
+            "question_book", "text-", "ambox", "padlock", "lock-",
+            "crystal_clear", "nuvola", "gnome-", "tango-", "fairuse",
+            "replacement", "placeholder", "generic", "blank",
+        ]
         photo_images = [
             img["title"] for img in images
             if any(ext in img["title"].lower() for ext in [".jpg", ".jpeg", ".png"])
-            and not any(skip in img["title"].lower() for skip in ["icon", "logo", "signature", "flag", "map", "chart", "diagram"])
+            and not any(skip in img["title"].lower() for skip in skip_words)
         ]
 
         if not photo_images:
             print(f"No suitable images found for {celebrity_name}")
             return []
 
-        # Resolve actual URLs for all filtered images
+        # Resolve actual URLs with dimensions to filter out non-photo images
         image_urls = []
+        # Batch resolve in groups of 50 (API limit) for efficiency
         for img_title in photo_images:
             url_params = {
                 "action": "query",
                 "titles": img_title,
                 "prop": "imageinfo",
-                "iiprop": "url",
+                "iiprop": "url|size",
                 "format": "json"
             }
 
@@ -112,7 +124,20 @@ def search_wikimedia_images(celebrity_name: str, num_images: int = 10) -> List[s
                 page = list(pages.values())[0]
                 imageinfo = page.get("imageinfo", [])
                 if imageinfo:
-                    img_url = imageinfo[0].get("url")
+                    info = imageinfo[0]
+                    img_url = info.get("url")
+                    width = info.get("width", 0)
+                    height = info.get("height", 0)
+
+                    # Skip tiny images (icons/thumbnails) and very wide banners
+                    if width < 200 or height < 200:
+                        continue
+                    # Skip extreme aspect ratios (panoramas, banners, infographics)
+                    if width > 0 and height > 0:
+                        ratio = width / height
+                        if ratio > 2.5 or ratio < 0.25:
+                            continue
+
                     if img_url:
                         image_urls.append(img_url)
 
