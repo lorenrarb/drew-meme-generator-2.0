@@ -526,8 +526,6 @@ async function swapCelebrity(imageUrl) {
 
 // ── Roast ──────────────────────────────────────────────────
 function buildRoastPanel(originalPath) {
-  // Convert relative path to absolute URL for the API
-  const absUrl = window.location.origin + originalPath;
   return '<div class="roast-panel">'
     + '<h3>Roast Drew</h3>'
     + '<div class="preset-chips">'
@@ -536,7 +534,7 @@ function buildRoastPanel(originalPath) {
     + '  <span class="chip" data-preset="gentle" onclick="toggleChip(this)">Be Gentle</span>'
     + '</div>'
     + '<input class="roast-input" type="text" placeholder="Add your own spin..." />'
-    + '<button class="btn-roast" onclick="submitRoast(this, \\'' + absUrl.replace(/'/g, "\\\\'") + '\\')">Roast Drew</button>'
+    + '<button class="btn-roast" onclick="submitRoast(this, \\'' + originalPath.replace(/'/g, "\\\\'") + '\\')">Roast Drew</button>'
     + '<div class="spinner" id="roast-spinner"></div>'
     + '<div class="roast-result-container"></div>'
     + '</div>';
@@ -567,7 +565,7 @@ async function submitRoast(btn, imageUrl) {
     const resp = await fetch('/api/roast', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ image_url: imageUrl, preset: preset, custom_spin: customSpin })
+      body: JSON.stringify({ image_path: imageUrl, preset: preset, custom_spin: customSpin })
     });
     const data = await resp.json();
     spinner.className = 'spinner';
@@ -742,7 +740,7 @@ async def upload_swap(file: UploadFile = File(...)):
 # ── Roast Endpoint ────────────────────────────────────────────
 
 class RoastRequest(BaseModel):
-    image_url: str
+    image_path: str
     preset: str = ""
     custom_spin: str = ""
 
@@ -767,8 +765,19 @@ async def roast_drew(body: RoastRequest):
     if not grok_api_key:
         raise HTTPException(status_code=503, detail="Roast feature unavailable — Grok_API_KEY not configured")
 
-    if not body.image_url:
-        raise HTTPException(status_code=400, detail="image_url is required")
+    if not body.image_path:
+        raise HTTPException(status_code=400, detail="image_path is required")
+
+    # Read image from disk and convert to base64 data URL
+    import base64
+    local_path = body.image_path.lstrip("/")
+    if not os.path.isfile(local_path):
+        raise HTTPException(status_code=404, detail="Image file not found")
+
+    with open(local_path, "rb") as f:
+        img_bytes = f.read()
+    b64 = base64.b64encode(img_bytes).decode("utf-8")
+    data_url = f"data:image/jpeg;base64,{b64}"
 
     try:
         from openai import OpenAI
@@ -791,7 +800,7 @@ async def roast_drew(body: RoastRequest):
                 {
                     "role": "user",
                     "content": [
-                        {"type": "image_url", "image_url": {"url": body.image_url}},
+                        {"type": "image_url", "image_url": {"url": data_url}},
                         {"type": "text", "text": " ".join(user_parts)},
                     ],
                 },
