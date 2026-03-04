@@ -864,7 +864,7 @@ async def roast_drew(body: RoastRequest):
             user_parts.append(f"Additional direction: {body.custom_spin}")
 
         response = client.chat.completions.create(
-            model="grok-2-vision-1212",
+            model="grok-4-fast-non-reasoning",
             messages=[
                 {"role": "system", "content": ROAST_SYSTEM_PROMPT},
                 {
@@ -947,7 +947,7 @@ async def toast_drew(body: ToastRequest):
             user_parts.append(f"Additional direction: {body.custom_spin}")
 
         response = client.chat.completions.create(
-            model="grok-2-vision-1212",
+            model="grok-4-fast-non-reasoning",
             messages=[
                 {"role": "system", "content": TOAST_SYSTEM_PROMPT},
                 {

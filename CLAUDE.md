@@ -58,7 +58,7 @@ GET  /health                 → Health check
 - Filters out icons, logos, signatures, maps, charts
 
 **`POST /api/roast`** (Grok Vision Roast)
-- Sends the original celebrity/upload photo to Grok `grok-2-vision-1212` via OpenAI SDK
+- Sends the original celebrity/upload photo to Grok `grok-4-fast-non-reasoning` via OpenAI SDK
 - System prompt includes Drew's roastable traits (risk averse, luscious bangs, enormous calves, acts old, cheap, long-winded)
 - Presets: `savage`, `outfit`, `gentle` — inject tone guidance into user message
 - Optional `custom_spin` free-text appended as additional user direction
@@ -91,7 +91,7 @@ GET  /health                 → Health check
 ## Environment Variables
 
 Optional:
-- `Grok_API_KEY` — Grok API key for the roast feature (uses `grok-2-vision-1212` via `api.x.ai`)
+- `Grok_API_KEY` — Grok API key for the roast feature (uses `grok-4-fast-non-reasoning` via `api.x.ai`)
 - `DREW_FACE_PATH` — Path to Drew's face image (default: `./assets/drew_face.jpg`)
 - `PORT` or `FLASK_PORT` — Server port (default: 5000)
 
